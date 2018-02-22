@@ -23,6 +23,7 @@
 #include <locale>
 #include <fstream>
 #include <cstdlib>
+#include <globals.h>
 
 using namespace std;
 

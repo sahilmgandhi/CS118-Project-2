@@ -23,6 +23,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <globals.h>
 
 using namespace std;
 
