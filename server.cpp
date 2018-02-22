@@ -22,12 +22,12 @@
 #include <fcntl.h>
 #include <locale>
 #include <fstream>
+#include <cstdlib>
 
 using namespace std;
 
-#define PORT 5000
+int port = 5000;
 #define BUFSIZE 2048
-
 
 /**
  * This method throws the perror and exits the program
@@ -38,6 +38,25 @@ void throwError(string s) {
   exit(1);
 }
 
+/**
+ * Sends the SYN + ACK back to the client
+ **/
+void initateConnection() {}
+
+/**
+ * Sends the FIN to the client
+ **/
+void closeConnection() {}
+
+/**
+ * Sends the ack back to the client when it sends a FIN
+ **/
+void handleClose() {}
+
+/**
+ * Assemble the given file from chunks into a coherent file
+ **/
+void assembleFileFromChunks() {}
 
 /**
  * This method will reap zombie processes (signal handler for it)
@@ -51,29 +70,48 @@ void handle_sigchild(int sig) {
           sig);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+  // Just takes the port number as the argument.
+
+  // Processing the arguments
+  if (argc != 2) {
+    throwError(
+        "Please input the 1 argument: portnumber. Exiting the program ...");
+  }
+  port = atoi(argv[1]);
+  if (port < 1024) {
+    throwError("Could not process int or trying to use privileged port. "
+               "Exiting the program ...");
+  }
+
   int sockfd, recvlen;
   struct sockaddr_in my_addr;
   struct sockaddr_in their_addr;
-  unsigned char buf[BUFSIZE]; 
+  unsigned char buf[BUFSIZE];
   socklen_t sin_size;
+
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
+
   memset((char *)&my_addr, 0, sizeof(my_addr));
   my_addr.sin_family = AF_INET;
-  my_addr.sin_port = htons(PORT);
+  my_addr.sin_port = htons(port);
   my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
   if (bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0)
-      throwError("bind");
+    throwError("bind");
   sin_size = sizeof(struct sockaddr_in);
+
   // Start listening in on connections:
   while (1) {
-    recvlen = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&their_addr, &sin_size);
-    if (recvlen > 0){
+    recvlen = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&their_addr,
+                       &sin_size);
+    if (recvlen > 0) {
       buf[recvlen] = 0;
       printf("received message: \"%s\"\n", buf);
     }
   }
+
   close(sockfd);
   return 0;
 }
