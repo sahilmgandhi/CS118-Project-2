@@ -23,7 +23,8 @@
 #include <locale>
 #include <fstream>
 #include <cstdlib>
-#include <globals.h>
+#include "globals.h"
+#include "tcp_packet.h"
 
 using namespace std;
 
@@ -108,6 +109,7 @@ int main(int argc, char *argv[]) {
     recvlen = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&their_addr,
                        &sin_size);
     if (recvlen > 0) {
+      cout << recvlen << endl;
       buf[recvlen] = 0;
       printf("received message: \"%s\"\n", buf);
     }

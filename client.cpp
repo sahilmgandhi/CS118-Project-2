@@ -23,7 +23,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <cstdlib>
-#include <globals.h>
+#include "globals.h"
+#include "tcp_packet.h"
 
 using namespace std;
 
@@ -47,6 +48,21 @@ void handle_sigchild(int sig) {
   fprintf(stderr,
           "Child exited successfully with code %d. Reaped child process.\n",
           sig);
+}
+
+uint8_t *convertPacket(TCP_Packet p) {
+  uint8_t *temp = new uint8_t[MSS];
+
+  memcpy(temp, &p.header.seqNumber, sizeof(uint16_t));
+  memcpy(temp + sizeof(uint16_t), &p.header.ackNumber, sizeof(uint16_t));
+  memcpy(temp + 2 * sizeof(uint16_t), &p.header.flags[0], sizeof(uint8_t));
+  memcpy(temp + 2 * sizeof(uint16_t) + sizeof(uint8_t), &p.header.flags[1],
+         sizeof(uint8_t));
+  memcpy(temp + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t), &p.header.flags[2],
+         sizeof(uint8_t));
+  memcpy(temp + 2 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &p.header.dataLen,
+         sizeof(uint16_t));
+  return temp;
 }
 
 /**
@@ -85,9 +101,9 @@ int main(int argc, char *argv[]) {
   }
 
   string hostName(argv[1]);
-  string fileName(argv[2]);
+  string fileName(argv[3]);
 
-  port = atoi(argv[3]);
+  port = atoi(argv[2]);
   if (port < 1024) {
     throwError("Could not process int or trying to use privileged port. "
                "Exiting the program ...");
@@ -111,10 +127,15 @@ int main(int argc, char *argv[]) {
          server->h_length);
   addr.sin_port = htons(port);
 
-  if (sendto(sockfd, msg, strlen(msg), 0, (struct sockaddr *)&addr,
+  TCP_Packet p;
+  p.header.flags[0] = 1;
+  cout << "made it here" << endl;
+  uint8_t *packet = convertPacket(p);
+  cout << sizeof(packet) << endl;
+  if (sendto(sockfd, packet, sizeof(packet), 0, (struct sockaddr *)&addr,
              sizeof(addr)) < 0)
     throwError("Could not send to the server");
-
+  delete[] packet;
   close(sockfd);
   return 0;
 }

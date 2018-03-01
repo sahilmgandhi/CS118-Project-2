@@ -1,17 +1,20 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
-#define PACKET_SIZE 1024
-#define HEADER_SIZE 8
-#define MSS 1032 // Packet + Header size
+#define PACKET_SIZE 1015
+#define HEADER_SIZE 9
+#define MSS 1024 // Packet + Header size
 #define RTO 500
+
+#define MAXSEQ 30720 // This is a value in bytes
+#define WINDOW 5120  // This is a value in bytes
 
 // Macros for TCP Header
 #define SEQ 0
 #define ACK 1
-#define WIN 2
+// #define WIN 2
 #define FLAGS 3
-#define NUM_FIELDS 4
+#define NUM_FIELDS 3
 
 // Macros for congestion control
 // **ONLY IF WE attempt this for extra credit**
