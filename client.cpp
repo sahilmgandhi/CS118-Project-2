@@ -50,26 +50,38 @@ void handle_sigchild(int sig) {
           sig);
 }
 
-uint8_t *convertPacket(TCP_Packet p) {
-  uint8_t *temp = new uint8_t[MSS];
-
-  memcpy(temp, &p.header.seqNumber, sizeof(uint16_t));
-  memcpy(temp + sizeof(uint16_t), &p.header.ackNumber, sizeof(uint16_t));
-  memcpy(temp + 2 * sizeof(uint16_t), &p.header.flags[0], sizeof(uint8_t));
-  memcpy(temp + 2 * sizeof(uint16_t) + sizeof(uint8_t), &p.header.flags[1],
-         sizeof(uint8_t));
-  memcpy(temp + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t), &p.header.flags[2],
-         sizeof(uint8_t));
-  memcpy(temp + 2 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &p.header.dataLen,
-         sizeof(uint16_t));
-  return temp;
-}
-
 /**
  * Send the SYN to start the connection, and then the ACK to finsh off the
  *connection
  **/
-void initateConnection() {}
+void initiateConnection(int sockfd, struct sockaddr_in addr) {
+  TCP_Packet p;
+  socklen_t sin_size;
+  p.setFlags(0, 1, 0);
+  uint8_t packet[MSS];
+  p.convertPacketToBuffer(packet);
+  cout << "Sending packet SYN" << endl;
+  if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
+      0) {
+    throwError("Could not send to the server");
+  }
+  uint8_t buf[MSS + 1];
+  int recvlen;
+  while (1) {
+    recvlen =
+        recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+    if (recvlen > 0) {
+      buf[recvlen] = 0;
+      TCP_Packet rec;
+      rec.convertBufferToPacket(buf);
+      cout << unsigned(rec.header.flags[0]) << unsigned(rec.header.flags[1])
+           << unsigned(rec.header.flags[2]) << endl;
+      if (rec.getAck()) {
+        cout << "ack received" << endl;
+      }
+    }
+  }
+}
 
 /**
  * Send the FIN to close the connection
@@ -92,7 +104,8 @@ void breakFileIntoChunks() {}
 void createSegmentTimer() {}
 
 int main(int argc, char *argv[]) {
-  // <server hostname><server portnumber><filename> --> Inputs from the console
+  // <server hostname><server portnumber><filename> --> Inputs from the
+  // console
 
   // Processing the arguments:
   if (argc != 4) {
@@ -112,7 +125,6 @@ int main(int argc, char *argv[]) {
   int sockfd;
   struct hostent *server;
   struct sockaddr_in addr;
-  char msg[] = "test";
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -127,15 +139,17 @@ int main(int argc, char *argv[]) {
          server->h_length);
   addr.sin_port = htons(port);
 
+  initiateConnection(sockfd, addr);
+
   TCP_Packet p;
-  p.header.flags[0] = 1;
-  cout << "made it here" << endl;
-  uint8_t *packet = convertPacket(p);
-  cout << sizeof(packet) << endl;
-  if (sendto(sockfd, packet, sizeof(packet), 0, (struct sockaddr *)&addr,
-             sizeof(addr)) < 0)
+  p.setFlags(0, 33, 0);
+  uint8_t testArr[6] = {1, 2, 3, 4, 5, 6};
+  p.setData(testArr, 6);
+  uint8_t packet[MSS];
+  p.convertPacketToBuffer(packet);
+  if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
+      0)
     throwError("Could not send to the server");
-  delete[] packet;
   close(sockfd);
   return 0;
 }

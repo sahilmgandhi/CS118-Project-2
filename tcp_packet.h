@@ -15,12 +15,72 @@ public:
     // set the cwnd for extra credit portion. Default is 5120 bytes (5 packets)
   } header;
 
-  uint8_t data[1015] = {0}; // 1015 bytes for data
+  uint8_t data[PACKET_SIZE] = {0}; // 1015 bytes for data
 
-  // Store the data in a vector
-  // Mark packet as sent and acked as necessary
-  // Packets by default arent acked or sent
+  bool sent = false;
+  bool acked = false;
 
-  // bool sent = false;
-  // bool acked = false;
+  TCP_Packet() { memset((char *)&data, 0, PACKET_SIZE); }
+  // Getters:
+  bool isSent() { return sent; }
+  bool isAcked() { return acked; }
+  uint16_t getLen() { return header.dataLen; }
+  bool getAck() { return header.flags[0] == 1; }
+  bool getSyn() { return header.flags[1] == 1; }
+  bool getFin() { return header.flags[2] == 1; }
+
+  // Setters:
+  void setFlags(uint8_t a, uint8_t s, uint8_t f) {
+    header.flags[0] = a;
+    header.flags[1] = s;
+    header.flags[2] = f;
+  }
+
+  void setData(uint8_t *buff, int len) {
+    if (len > PACKET_SIZE) {
+      return;
+    } else {
+      for (int i = 0; i < len; i++) {
+        data[i] = buff[i];
+      }
+      header.dataLen = len;
+    }
+  }
+
+  void setSeqNumber(uint16_t seq) { header.seqNumber = seq; }
+  void setAckNumber(uint16_t ack) { header.ackNumber = ack; }
+
+  void setSent() { sent = true; }
+  void setAcked() { sent = true; }
+
+  void convertBufferToPacket(uint8_t *buff) {
+    header.seqNumber = (buff[1] << 8) | buff[0];
+    header.ackNumber = (buff[3] << 8) | buff[2];
+    header.flags[0] = buff[4];
+    header.flags[1] = buff[5];
+    header.flags[2] = buff[6];
+    header.dataLen = (buff[8] << 8) | buff[7];
+
+    for (int i = 0; i < header.dataLen; i++) {
+      data[i] = buff[9 + i];
+    }
+  }
+
+  void convertPacketToBuffer(uint8_t *temp) {
+    memset((char *)temp, 0, MSS);
+
+    memcpy(temp, &header.seqNumber, sizeof(uint16_t));
+    memcpy(temp + sizeof(uint16_t), &header.ackNumber, sizeof(uint16_t));
+    memcpy(temp + 2 * sizeof(uint16_t), &header.flags[0], sizeof(uint8_t));
+    memcpy(temp + 2 * sizeof(uint16_t) + sizeof(uint8_t), &header.flags[1],
+           sizeof(uint8_t));
+    memcpy(temp + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t), &header.flags[2],
+           sizeof(uint8_t));
+    memcpy(temp + 2 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &header.dataLen,
+           sizeof(uint16_t));
+    if (header.dataLen > 0) {
+      memcpy(temp + 3 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &data,
+             header.dataLen);
+    }
+  }
 };

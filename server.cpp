@@ -29,7 +29,6 @@
 using namespace std;
 
 int port = 5000;
-#define BUFSIZE 2048
 
 /**
  * This method throws the perror and exits the program
@@ -89,7 +88,7 @@ int main(int argc, char *argv[]) {
   int sockfd, recvlen;
   struct sockaddr_in my_addr;
   struct sockaddr_in their_addr;
-  unsigned char buf[BUFSIZE];
+  uint8_t buf[MSS + 1];
   socklen_t sin_size;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -106,12 +105,28 @@ int main(int argc, char *argv[]) {
 
   // Start listening in on connections:
   while (1) {
-    recvlen = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&their_addr,
+    recvlen = recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&their_addr,
                        &sin_size);
     if (recvlen > 0) {
-      cout << recvlen << endl;
       buf[recvlen] = 0;
-      printf("received message: \"%s\"\n", buf);
+      TCP_Packet p;
+      p.convertBufferToPacket(buf);
+      if (p.getSyn()) {
+        TCP_Packet sendB;
+        sendB.setFlags(1, 1, 0);
+        uint8_t sendBuf[MSS];
+        cout << unsigned(sendB.header.flags[0])
+             << unsigned(sendB.header.flags[1])
+             << unsigned(sendB.header.flags[2]) << endl;
+        sendB.convertPacketToBuffer(sendBuf);
+        cout << "Sending packet SYN ACK" << endl;
+        cout << unsigned(sendBuf[4]) << unsigned(sendBuf[5])
+             << unsigned(sendBuf[6]) << endl;
+        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                   sizeof(their_addr)) < 0) {
+          throwError("Could not send to the server");
+        }
+      }
     }
   }
 
