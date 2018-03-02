@@ -5,13 +5,13 @@ class TCP_Packet {
 
 public:
   struct TCP_Header {
-    // Total size is
+    // Total size is 9 Bytes
     uint16_t seqNumber = 0; // 2 bytes
     uint16_t ackNumber = 0; // 2 bytes
 
     // pos 0 = ack, pos 1 = syn, pos 2 = fin
-    uint8_t flags[3] = {0, 0, 0}; // 3 bytes
-    uint16_t dataLen = 0;         // 2 bytes
+    uint8_t flags[FLAGS] = {0}; // 3 bytes
+    uint16_t dataLen = 0;       // 2 bytes
     // set the cwnd for extra credit portion. Default is 5120 bytes (5 packets)
   } header;
 
@@ -20,7 +20,12 @@ public:
   bool sent = false;
   bool acked = false;
 
-  TCP_Packet() { memset((char *)&data, 0, PACKET_SIZE); }
+  // constructor
+  TCP_Packet() {
+    memset((char *)&data, 0, PACKET_SIZE);
+    memset((char *)&header.flags, 0, FLAGS);
+  }
+
   // Getters:
   bool isSent() { return sent; }
   bool isAcked() { return acked; }
@@ -28,6 +33,8 @@ public:
   bool getAck() { return header.flags[0] == 1; }
   bool getSyn() { return header.flags[1] == 1; }
   bool getFin() { return header.flags[2] == 1; }
+  uint16_t getSeqNumber() { return header.seqNumber; }
+  uint16_t getAckNumber() { return header.ackNumber; }
 
   // Setters:
   void setFlags(uint8_t a, uint8_t s, uint8_t f) {

@@ -10,8 +10,6 @@
 #define WINDOW 5120  // This is a value in bytes
 
 // Macros for TCP Header
-#define SEQ 0
-#define ACK 1
 // #define WIN 2
 #define FLAGS 3
 #define NUM_FIELDS 3

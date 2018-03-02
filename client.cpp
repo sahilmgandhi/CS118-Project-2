@@ -29,10 +29,13 @@
 using namespace std;
 
 int port = 5000;
+uint16_t serverSeqNum = 0;
+uint16_t clientSeqNum = 0;
+
 /**
-     * This method throws the perror and exits the program
-     * @param s A string that is the error message
-     **/
+ * This method throws the perror and exits the program
+ * @param s A string that is the error message
+ **/
 void throwError(string s) {
   perror(s.c_str());
   exit(1);
@@ -51,22 +54,31 @@ void handle_sigchild(int sig) {
 }
 
 /**
- * Send the SYN to start the connection, and then the ACK to finsh off the
- *connection
+ * Send the SYN to start the connection send the ACK to finsih the connection
+ * and send the datafile name.
+ * @param sockfd Integer represendting the socket number
+ * @param addr The socaddr_in structure
+ * @param fileName The name of the file passed in!
  **/
-void initiateConnection(int sockfd, struct sockaddr_in addr) {
+void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
+
+  // send SYN
   TCP_Packet p;
   socklen_t sin_size;
+  clientSeqNum = rand() % 10000;
+  p.setSeqNumber(clientSeqNum);
   p.setFlags(0, 1, 0);
   uint8_t packet[MSS];
   p.convertPacketToBuffer(packet);
-  cout << "Sending packet SYN" << endl;
+  cout << "Sending packet " << p.getSeqNumber() << " SYN " << endl;
   if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
       0) {
     throwError("Could not send to the server");
   }
   uint8_t buf[MSS + 1];
   int recvlen;
+
+  // Receive SYN ACK
   while (1) {
     recvlen =
         recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
@@ -74,10 +86,24 @@ void initiateConnection(int sockfd, struct sockaddr_in addr) {
       buf[recvlen] = 0;
       TCP_Packet rec;
       rec.convertBufferToPacket(buf);
-      cout << unsigned(rec.header.flags[0]) << unsigned(rec.header.flags[1])
-           << unsigned(rec.header.flags[2]) << endl;
       if (rec.getAck()) {
-        cout << "ack received" << endl;
+        cout << "Receiving packet " << rec.getSeqNumber() << endl;
+
+        // Send back a packet with the filename
+        TCP_Packet sendFilename;
+        sendFilename.setData((uint8_t *)fileName.c_str(), fileName.length());
+        sendFilename.setFlags(1, 0, 0);
+        sendFilename.setAckNumber(rec.getSeqNumber());
+        clientSeqNum += 1;
+        serverSeqNum = rec.getSeqNumber();
+        sendFilename.setSeqNumber(clientSeqNum);
+        sendFilename.convertPacketToBuffer(packet);
+        cout << "Sending packet " << sendFilename.getSeqNumber() << endl;
+        if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+                   sizeof(addr)) < 0) {
+          throwError("Could not send to the server");
+        }
+        return;
       }
     }
   }
@@ -139,7 +165,9 @@ int main(int argc, char *argv[]) {
          server->h_length);
   addr.sin_port = htons(port);
 
-  initiateConnection(sockfd, addr);
+  initiateConnection(sockfd, addr, fileName);
+
+  // Then do other things here!
 
   TCP_Packet p;
   p.setFlags(0, 33, 0);
