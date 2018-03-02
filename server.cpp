@@ -80,12 +80,16 @@ string initiateConnection(int sockfd, struct sockaddr_in their_addr) {
         sendB.setFlags(1, 0, 0);
         sendB.setSeqNumber(serverSeqNum);
         sendB.setAckNumber(clientSeqNum);
-        for (int i = 0; i < sendB.getLen(); i++) {
-          fileName += (unsigned char)sendB.data[i];
+        for (int i = 0; i < p.getLen(); i++) {
+          fileName += (char)p.data[i];
         }
+        sendB.convertPacketToBuffer(sendBuf);
         cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
              << endl;
-
+        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                   sizeof(their_addr)) < 0) {
+          throwError("Could not send to the server");
+        }
         return fileName;
       }
       memset((char *)&buf, 0, MSS + 1);
