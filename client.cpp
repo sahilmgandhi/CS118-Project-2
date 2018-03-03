@@ -194,7 +194,7 @@ int main(int argc, char *argv[]) {
   ofstream outFile;
   outFile.open("example.txt", ios::out | ios::binary);
   if (outFile.is_open()){
-    outFile.write(fileBuffer, (streamsize)(fileVector.size()+1));
+    outFile.write(fileBuffer, (streamsize)(fileVector.size()));
     outFile.close();
   }
 
