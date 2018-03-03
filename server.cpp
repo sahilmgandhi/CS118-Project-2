@@ -3,6 +3,14 @@
 // Project 2
 // This is the server code for the second project.
 
+// 1) Send file (< 1015 bytes)
+// 2) Send file (> 1015 bytes)
+// 3) Put things in the windows array
+// 4) Introduce timers
+// 5) Fin Sequence
+// 6) Handle packet drops
+// 7) Extra credit??
+
 #include <errno.h>
 #include <fcntl.h>
 #include <fstream>
@@ -48,7 +56,7 @@ void throwError(string s) {
  * @param their_addr  The sockaddr_in struct
  * @return string     String representing the file name that was parsed
  **/
-string initiateConnection(int sockfd, struct sockaddr_in& their_addr) {
+string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
   int recvlen;
   uint8_t buf[MSS + 1];
   socklen_t sin_size = sizeof(struct sockaddr_in);
@@ -113,9 +121,36 @@ void closeConnection() {}
 void handleClose() {}
 
 /**
- * Break up the file into chunks to keep
+ * Send chunked file to the client
  **/
-void breakFileIntoChunks() {}
+void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
+                     long long fileSize, streampos fs, char *fileBuffer) {
+  long numPackets = 0;
+  uint8_t sendBuf[MSS];
+  TCP_Packet p;
+  // Split file into packets and send them
+  numPackets = fs / PACKET_SIZE + 1;
+  for (long i = 0; i < numPackets; i++) {
+    p.setFlags(0, 0, 0);
+    cout << serverSeqNum;
+    p.setSeqNumber(serverSeqNum);
+    p.setAckNumber(clientSeqNum);
+    cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
+    if (i == numPackets - 1) {
+      p.setData((uint8_t *)(fileBuffer + i * MSS), (int)(fileSize - MSS * i));
+      serverSeqNum += (uint16_t)(int)(fileSize - MSS * i);
+      p.setFlags(0, 0, 1);
+    } else {
+      p.setData((uint8_t *)(fileBuffer + i * MSS), MSS);
+      serverSeqNum += MSS;
+    }
+    p.convertPacketToBuffer(sendBuf);
+    if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+               sizeof(their_addr)) < 0) {
+      throwError("Could not send to the server");
+    }
+  }
+}
 
 /**
  * This method will reap zombie processes (signal handler for it)
@@ -163,11 +198,9 @@ int main(int argc, char *argv[]) {
   // Initiate connection and get the fileName
   string fileName = initiateConnection(sockfd, their_addr);
   cout << fileName << endl;
+
   char *fileBuffer;
-  uint8_t sendBuf[MSS];
   long long fileSize = 0;
-  long numPackets;
-  TCP_Packet p;
   ifstream inFile;
 
   // Open and read in file
@@ -182,30 +215,7 @@ int main(int argc, char *argv[]) {
     inFile.close();
   }
 
-  // Split file into packets and send them
-  numPackets = fs/PACKET_SIZE+1;
-  for (long i = 0; i < numPackets; i++){
-    p.setFlags(0, 0, 0);
-    cout << serverSeqNum;
-    p.setSeqNumber(serverSeqNum);
-    p.setAckNumber(clientSeqNum);
-    cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
-    if (i == numPackets -1){
-      p.setData((uint8_t*)(fileBuffer+i*1015), (int)(fileSize-1015*i));
-      serverSeqNum += (uint16_t)(int)(fileSize-1015*i);
-      p.setFlags(0, 0, 1);
-    }
-    else{
-      p.setData((uint8_t*)(fileBuffer+i*1015), 1015);
-      serverSeqNum += 1015;
-    }
-    p.convertPacketToBuffer(sendBuf);
-    if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
-                   sizeof(their_addr)) < 0) {
-          throwError("Could not send to the server");
-        }
-  }
+  sendChunkedFile(sockfd, their_addr, fileSize, fs, fileBuffer);
   delete fileBuffer;
   close(sockfd);
-  return 0;
 }

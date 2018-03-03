@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
   uint8_t data[MSS];
   int recvlen;
   vector<char> fileVector;
-  char* fileBuffer;
+  char *fileBuffer;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -175,8 +175,9 @@ int main(int argc, char *argv[]) {
 
   initiateConnection(sockfd, addr, fileName);
   // Then do other things here!
-  while(1){
-    recvlen =recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+  while (1) {
+    recvlen =
+        recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
     buf[recvlen] = 0;
     TCP_Packet rec;
     rec.convertBufferToPacket(buf);
@@ -184,20 +185,21 @@ int main(int argc, char *argv[]) {
     rec.getData(data);
     for (int i = 0; i < rec.getLen(); i++)
       fileVector.push_back(data[i]);
-    if(rec.getFin())
+    if (rec.getFin())
       break;
   }
-  fileBuffer = new char[fileVector.size()+1];
-  for(unsigned long i = 0; i < fileVector.size(); i++)
+  fileBuffer = new char[fileVector.size() + 1];
+  for (unsigned long i = 0; i < fileVector.size(); i++)
     fileBuffer[i] = fileVector[i];
   fileBuffer[fileVector.size()] = 0;
   ofstream outFile;
   outFile.open("example.txt", ios::out | ios::binary);
-  if (outFile.is_open()){
+  if (outFile.is_open()) {
     outFile.write(fileBuffer, (streamsize)(fileVector.size()));
     outFile.close();
   }
 
+  delete fileBuffer;
   close(sockfd);
   return 0;
 }
