@@ -35,11 +35,10 @@ public:
   bool getFin() { return header.flags[2] == 1; }
   uint16_t getSeqNumber() { return header.seqNumber; }
   uint16_t getAckNumber() { return header.ackNumber; }
-  void getData(uint8_t *buff){
-    for(int i = 0; i < header.dataLen; i++)
+  void getData(uint8_t *buff) {
+    for (int i = 0; i < header.dataLen; i++)
       buff[i] = data[i];
   }
-
 
   // Setters:
   void setFlags(uint8_t a, uint8_t s, uint8_t f) {
@@ -50,6 +49,7 @@ public:
 
   void setData(uint8_t *buff, int len) {
     if (len > PACKET_SIZE) {
+      cout << "Data length larger than PACKET_SIZE. Not modifying data" << endl;
       return;
     } else {
       for (int i = 0; i < len; i++) {
@@ -63,8 +63,9 @@ public:
   void setAckNumber(uint16_t ack) { header.ackNumber = ack; }
 
   void setSent() { sent = true; }
-  void setAcked() { sent = true; }
+  void setAcked() { acked = true; }
 
+  // Converters from Stream to Packet and Vice Versa
   void convertBufferToPacket(uint8_t *buff) {
     header.seqNumber = (buff[1] << 8) | buff[0];
     header.ackNumber = (buff[3] << 8) | buff[2];

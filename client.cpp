@@ -157,8 +157,8 @@ int main(int argc, char *argv[]) {
   uint8_t buf[MSS + 1];
   uint8_t data[MSS];
   int recvlen;
-  vector<char> fileVector;
-  char *fileBuffer;
+  vector<uint8_t> fileVector;
+  uint8_t *fileBuffer;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -188,14 +188,16 @@ int main(int argc, char *argv[]) {
     if (rec.getFin())
       break;
   }
-  fileBuffer = new char[fileVector.size() + 1];
-  for (unsigned long i = 0; i < fileVector.size(); i++)
+  fileBuffer = new uint8_t[fileVector.size() + 1];
+  for (unsigned long i = 0; i < fileVector.size(); i++) {
     fileBuffer[i] = fileVector[i];
+    cout << fileVector[i];
+  }
   fileBuffer[fileVector.size()] = 0;
   ofstream outFile;
   outFile.open("example.txt", ios::out | ios::binary);
   if (outFile.is_open()) {
-    outFile.write(fileBuffer, (streamsize)(fileVector.size()));
+    outFile.write((const char *)fileBuffer, (streamsize)(fileVector.size()));
     outFile.close();
   }
 

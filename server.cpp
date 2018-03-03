@@ -129,21 +129,31 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
   uint8_t sendBuf[MSS];
   TCP_Packet p;
   // Split file into packets and send them
+  // cout << fileSize << " " << fs << " " << endl;
+  // for (int i = 0; i < fs; i++) {
+  //   cout << char(fileBuffer[i]);
+  // }
   numPackets = fs / PACKET_SIZE + 1;
   for (long i = 0; i < numPackets; i++) {
     p.setFlags(0, 0, 0);
-    cout << serverSeqNum;
     p.setSeqNumber(serverSeqNum);
     p.setAckNumber(clientSeqNum);
     cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
     if (i == numPackets - 1) {
-      p.setData((uint8_t *)(fileBuffer + i * MSS), (int)(fileSize - MSS * i));
-      serverSeqNum += (uint16_t)(int)(fileSize - MSS * i);
+      cout << "in here" << endl;
+      p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
+                (int)(fileSize - PACKET_SIZE * i));
+      serverSeqNum += (uint16_t)(int)(fileSize - PACKET_SIZE * i);
       p.setFlags(0, 0, 1);
     } else {
-      p.setData((uint8_t *)(fileBuffer + i * MSS), MSS);
-      serverSeqNum += MSS;
+      cout << "in this one" << endl;
+      p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
+      serverSeqNum += PACKET_SIZE;
     }
+    for (int j = 0; j < p.getLen(); j++) {
+      cout << char(p.data[j]);
+    }
+    cout << endl;
     p.convertPacketToBuffer(sendBuf);
     if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                sizeof(their_addr)) < 0) {
