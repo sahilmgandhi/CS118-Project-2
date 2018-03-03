@@ -94,6 +94,7 @@ string initiateConnection(int sockfd, struct sockaddr_in their_addr) {
                    sizeof(their_addr)) < 0) {
           throwError("Could not send to the server");
         }
+        serverSeqNum += 1;
         return fileName;
       }
       memset((char *)&buf, 0, MSS + 1);
@@ -142,10 +143,9 @@ int main(int argc, char *argv[]) {
                "Exiting the program ...");
   }
 
-  int sockfd, recvlen;
+  int sockfd;
   struct sockaddr_in my_addr;
   struct sockaddr_in their_addr;
-  uint8_t buf[MSS + 1];
   socklen_t sin_size;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -163,31 +163,45 @@ int main(int argc, char *argv[]) {
   // Initiate connection and get the fileName
   string fileName = initiateConnection(sockfd, their_addr);
   cout << fileName << endl;
-  while (1) {
-    recvlen = recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&their_addr,
-                       &sin_size);
-    if (recvlen > 0) {
-      buf[recvlen] = 0;
-      TCP_Packet p;
-      p.convertBufferToPacket(buf);
-      if (p.getSyn()) {
-        cout << "Receiving packet " << p.getSeqNumber() << endl;
-        clientSeqNum = p.getSeqNumber();
-        TCP_Packet sendB;
-        sendB.setFlags(1, 1, 0);
-        serverSeqNum = rand() % 10000;
-        sendB.setSeqNumber(serverSeqNum);
-        sendB.setAckNumber(clientSeqNum);
-        uint8_t sendBuf[MSS];
-        sendB.convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
-             << endl;
-        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+  char *fileBuffer;
+  uint8_t sendBuf[MSS];
+  long long fileSize = 0;
+  long numPackets;
+  TCP_Packet p;
+  ifstream inFile;
+
+  // Open and read in file
+  inFile.open(fileName.c_str(), ios::in | ios::binary | ios::ate);
+  streampos fs;
+  if (inFile.is_open()) {
+    fs = inFile.tellg();
+    fileSize = (long long)(fs);
+    fileBuffer = new char[(long long)(fs) + 1];
+    inFile.seekg(0, ios::beg);
+    inFile.read(fileBuffer, fs);
+    inFile.close();
+  }
+
+  // Split file into packets and send them
+  numPackets = fs/PACKET_SIZE+1;
+  for (long i = 0; i < numPackets; i++){
+    p.setFlags(0, 0, 0);
+    p.setSeqNumber(serverSeqNum);
+    p.setAckNumber(clientSeqNum);
+    if (i == numPackets -1){
+      p.setData((uint8_t*)(fileBuffer+i*1015), (int)(fileSize-1015*i));
+      serverSeqNum += (uint16_t)(int)(fileSize-1015*i);
+      p.setFlags(0, 0, 1);
+    }
+    else{
+      p.setData((uint8_t*)(fileBuffer+i*1015), 1015);
+      serverSeqNum += 1015;
+    }
+    p.convertPacketToBuffer(sendBuf);
+    if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
           throwError("Could not send to the server");
         }
-      }
-    }
   }
 
   close(sockfd);

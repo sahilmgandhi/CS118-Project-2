@@ -23,6 +23,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <vector>
 #include "globals.h"
 #include "tcp_packet.h"
 
@@ -152,6 +153,10 @@ int main(int argc, char *argv[]) {
   int sockfd;
   struct hostent *server;
   struct sockaddr_in addr;
+  socklen_t sin_size;
+  uint8_t buf[MSS + 1];
+  int recvlen;
+  vector<char> fileBuffer;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -169,16 +174,13 @@ int main(int argc, char *argv[]) {
   initiateConnection(sockfd, addr, fileName);
 
   // Then do other things here!
+  while(1){
+    recvlen =recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+    buf[recvlen] = 0;
+    TCP_Packet rec;
+    rec.convertBufferToPacket(buf);
+  }
 
-  TCP_Packet p;
-  p.setFlags(0, 33, 0);
-  uint8_t testArr[6] = {1, 2, 3, 4, 5, 6};
-  p.setData(testArr, 6);
-  uint8_t packet[MSS];
-  p.convertPacketToBuffer(packet);
-  if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
-      0)
-    throwError("Could not send to the server");
   close(sockfd);
   return 0;
 }
