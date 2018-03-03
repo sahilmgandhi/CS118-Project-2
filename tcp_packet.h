@@ -35,6 +35,11 @@ public:
   bool getFin() { return header.flags[2] == 1; }
   uint16_t getSeqNumber() { return header.seqNumber; }
   uint16_t getAckNumber() { return header.ackNumber; }
+  void getData(uint8_t *buff){
+    for(int i = 0; i < header.dataLen; i++)
+      buff[i] = data[i];
+  }
+
 
   // Setters:
   void setFlags(uint8_t a, uint8_t s, uint8_t f) {

@@ -48,7 +48,7 @@ void throwError(string s) {
  * @param their_addr  The sockaddr_in struct
  * @return string     String representing the file name that was parsed
  **/
-string initiateConnection(int sockfd, struct sockaddr_in their_addr) {
+string initiateConnection(int sockfd, struct sockaddr_in& their_addr) {
   int recvlen;
   uint8_t buf[MSS + 1];
   socklen_t sin_size = sizeof(struct sockaddr_in);
@@ -186,6 +186,7 @@ int main(int argc, char *argv[]) {
   numPackets = fs/PACKET_SIZE+1;
   for (long i = 0; i < numPackets; i++){
     p.setFlags(0, 0, 0);
+    cout << serverSeqNum;
     p.setSeqNumber(serverSeqNum);
     p.setAckNumber(clientSeqNum);
     if (i == numPackets -1){
@@ -198,12 +199,14 @@ int main(int argc, char *argv[]) {
       serverSeqNum += 1015;
     }
     p.convertPacketToBuffer(sendBuf);
+    cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
     if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
+        cout << "bro";
           throwError("Could not send to the server");
         }
   }
-
+  delete fileBuffer;
   close(sockfd);
   return 0;
 }
