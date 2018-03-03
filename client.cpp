@@ -31,10 +31,11 @@ using namespace std;
 int port = 5000;
 uint16_t serverSeqNum = 0;
 uint16_t clientSeqNum = 0;
+TCP_Packet packetWindow[WINDOW / MSS];
 
 /**
  * This method throws the perror and exits the program
- * @param s A string that is the error message
+ * @param s         A string that is the error message
  **/
 void throwError(string s) {
   perror(s.c_str());
@@ -43,7 +44,7 @@ void throwError(string s) {
 
 /**
  * This method will reap zombie processes (signal handler for it)
- * @param sig   The signal for the signal handler
+ * @param sig       The signal for the signal handler
  **/
 void handle_sigchild(int sig) {
   while (waitpid((pid_t)(-1), 0, WNOHANG) > 0)
@@ -56,9 +57,9 @@ void handle_sigchild(int sig) {
 /**
  * Send the SYN to start the connection send the ACK to finsih the connection
  * and send the datafile name.
- * @param sockfd Integer represendting the socket number
- * @param addr The socaddr_in structure
- * @param fileName The name of the file passed in!
+ * @param sockfd    Integer represendting the socket number
+ * @param addr      The socaddr_in structure
+ * @param fileName  The name of the file passed in!
  **/
 void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
 
@@ -120,9 +121,9 @@ void closeConnection() {}
 void handleClose() {}
 
 /**
- * Break up the file into chunks to keep
+ * Assemble the given file from chunks into a coherent file
  **/
-void breakFileIntoChunks() {}
+void assembleFileFromChunks() {}
 
 /**
  * Attach a timer to the different segments and poll them at a certain rate??

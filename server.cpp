@@ -31,10 +31,11 @@ using namespace std;
 int port = 5000;
 uint16_t serverSeqNum = 0;
 uint16_t clientSeqNum = 0;
+TCP_Packet packetWindow[WINDOW / MSS];
 
 /**
  * This method throws the perror and exits the program
- * @param s A string that is the error message
+ * @param s           A string that is the error message
  **/
 void throwError(string s) {
   perror(s.c_str());
@@ -43,6 +44,9 @@ void throwError(string s) {
 
 /**
  * Sends the SYN + ACK back to the client
+ * @param sockfd      The socket for the connection
+ * @param their_addr  The sockaddr_in struct
+ * @return string     String representing the file name that was parsed
  **/
 string initiateConnection(int sockfd, struct sockaddr_in their_addr) {
   int recvlen;
@@ -108,9 +112,9 @@ void closeConnection() {}
 void handleClose() {}
 
 /**
- * Assemble the given file from chunks into a coherent file
+ * Break up the file into chunks to keep
  **/
-void assembleFileFromChunks() {}
+void breakFileIntoChunks() {}
 
 /**
  * This method will reap zombie processes (signal handler for it)
@@ -152,7 +156,7 @@ int main(int argc, char *argv[]) {
   my_addr.sin_port = htons(port);
   my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-  if (bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0)
+  if (::bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0)
     throwError("bind");
   sin_size = sizeof(struct sockaddr_in);
 
