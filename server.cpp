@@ -186,7 +186,6 @@ int main(int argc, char *argv[]) {
   numPackets = fs/PACKET_SIZE+1;
   for (long i = 0; i < numPackets; i++){
     p.setFlags(0, 0, 0);
-    cout << serverSeqNum;
     p.setSeqNumber(serverSeqNum);
     p.setAckNumber(clientSeqNum);
     cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
