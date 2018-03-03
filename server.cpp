@@ -189,6 +189,7 @@ int main(int argc, char *argv[]) {
     cout << serverSeqNum;
     p.setSeqNumber(serverSeqNum);
     p.setAckNumber(clientSeqNum);
+    cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
     if (i == numPackets -1){
       p.setData((uint8_t*)(fileBuffer+i*1015), (int)(fileSize-1015*i));
       serverSeqNum += (uint16_t)(int)(fileSize-1015*i);
@@ -199,10 +200,8 @@ int main(int argc, char *argv[]) {
       serverSeqNum += 1015;
     }
     p.convertPacketToBuffer(sendBuf);
-    cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
     if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
-        cout << "bro";
           throwError("Could not send to the server");
         }
   }
