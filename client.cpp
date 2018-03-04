@@ -124,6 +124,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
           // the timer will be restarted.
 
           initWindow[1].convertPacketToBuffer(packet);
+          cout << "Sending packet " << initWindow[1].getSeqNumber() << endl;
           if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
                      sizeof(addr)) < 0) {
             throwError("Could not send to the server");
@@ -148,6 +149,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
         counter++;
       } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut()) {
         initWindow[i].convertPacketToBuffer(packet);
+        cout << "Sending packet " << initWindow[i].getSeqNumber() << endl;
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
                    sizeof(addr)) < 0) {
           throwError("Could not send to the server");
@@ -162,6 +164,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
       // with receiving the files
       return;
     }
+    memset((char *)&buf, 0, MSS + 1);
   }
 }
 

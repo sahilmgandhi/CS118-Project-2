@@ -131,8 +131,12 @@ public:
       perror("clock gettime");
     }
 
-    return (long double)((stop.tv_sec - start.tv_sec) +
-                         (long double)(stop.tv_nsec - start.tv_nsec) /
-                             BILLION) < RTO;
+    // std::cout << (long double)((stop.tv_sec - start.tv_sec) +
+    //                            (long double)(stop.tv_nsec - start.tv_nsec) /
+    //                                BILLION)
+    //           << std::endl;
+    return ((long double)((stop.tv_sec - start.tv_sec) +
+                          (long double)(stop.tv_nsec - start.tv_nsec) /
+                              BILLION) > RTO);
   }
 };

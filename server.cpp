@@ -60,27 +60,49 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
   string fileName = "";
 
   while (1) {
-    recvlen = recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&their_addr,
-                       &sin_size);
+    recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
+                       (struct sockaddr *)&their_addr, &sin_size);
     if (recvlen > 0) {
       buf[recvlen] = 0;
       p.convertBufferToPacket(buf);
+      cout << "Receiving packet " << p.getSeqNumber() << endl;
       if (p.getSyn()) {
-        cout << "Receiving packet " << p.getSeqNumber() << endl;
-        clientSeqNum = p.getSeqNumber();
-        sendB.setFlags(1, 1, 0);
-        serverSeqNum = rand() % 10000;
-        sendB.setSeqNumber(serverSeqNum);
-        sendB.setAckNumber(clientSeqNum);
-        sendB.convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
-             << endl;
-        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
-                   sizeof(their_addr)) < 0) {
-          throwError("Could not send to the server");
+        // We have gotten a syn
+        if (!initWindow[0].isSent()) {
+          // We have not seen this syn yet, so construct the sendB packet
+
+          clientSeqNum = p.getSeqNumber();
+          sendB.setFlags(1, 1, 0);
+          serverSeqNum = rand() % 10000;
+          sendB.setSeqNumber(serverSeqNum);
+          sendB.setAckNumber(clientSeqNum);
+          sendB.convertPacketToBuffer(sendBuf);
+          cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
+               << endl;
+          if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                     sizeof(their_addr)) < 0) {
+            throwError("Could not send to the server");
+          }
+          sendB.startTimer();
+          sendB.setSent();
+          initWindow[0] = sendB;
+        } else {
+          // we already sent the syn/ack, we should immediately resend and
+          // restart the timer
+          initWindow[0].convertPacketToBuffer(sendBuf);
+          cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
+               << endl;
+          if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                     sizeof(their_addr)) < 0) {
+            throwError("Could not send to the server");
+          }
+          initWindow[0].startTimer();
         }
-      } else if (p.getAck()) {
-        cout << "Receiving packet " << p.getSeqNumber() << endl;
+      } else if (p.getAck() && initWindow[0].isSent() &&
+                 p.getAckNumber() == initWindow[0].getSeqNumber()) {
+        // Getting an ACK for the syn we previously sent and also getting the
+        // filename (piggy backed)
+        initWindow[0].setAcked();
         clientSeqNum = p.getSeqNumber();
         serverSeqNum += 1;
         sendB.setFlags(1, 0, 0);
@@ -90,14 +112,26 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
           fileName += (char)p.data[i];
         }
         sendB.convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
-             << endl;
+        cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
           throwError("Could not send to the server");
         }
         serverSeqNum += 1;
+        sendB.setSent();
+        initWindow[1] = sendB;
         return fileName;
+      }
+      // poll iniwitWindow[0] (not 1, since its just an ack and has no timer)
+      if (initWindow[0].isSent() && !initWindow[0].isAcked() &&
+          initWindow[0].hasTimedOut()) {
+        initWindow[0].convertPacketToBuffer(sendBuf);
+        cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
+        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                   sizeof(their_addr)) < 0) {
+          throwError("Could not send to the server");
+        }
+        initWindow[0].startTimer();
       }
       memset((char *)&buf, 0, MSS + 1);
     }
@@ -194,6 +228,15 @@ int main(int argc, char *argv[]) {
 
   // Initiate connection and get the fileName
   string fileName = initiateConnection(sockfd, their_addr);
+
+  /**
+   * So after initiateConnection, we still need to look at initWindow[1] and
+   * make sure that the ack is sent again if we receive the fileName. (ie we
+   *must keep polling the received packets to check that their sequence number
+   *is the same as the initWindow[1]'s ack number, and if it is, to resend the
+   *ack)
+   **/
+
   cout << fileName << endl;
 
   char *fileBuffer;
