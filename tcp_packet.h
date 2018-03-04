@@ -129,10 +129,10 @@ public:
     struct timespec stop;
     if (clock_gettime(CLOCK_MONOTONIC, &stop) == -1) {
       perror("clock gettime");
-      exit(EXIT_FAILURE);
     }
 
-    return ((stop.tv_sec - start.tv_sec) +
-            (stop.tv_nsec - start.tv_nsec) / BILLION) < RTO;
+    return (long double)((stop.tv_sec - start.tv_sec) +
+                         (long double)(stop.tv_nsec - start.tv_nsec) /
+                             BILLION) < RTO;
   }
 };

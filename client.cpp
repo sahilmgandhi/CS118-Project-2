@@ -73,13 +73,16 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
   p.setSeqNumber(clientSeqNum);
   p.setFlags(0, 1, 0);
   uint8_t packet[MSS];
-  initWindow[0] = p;
   p.convertPacketToBuffer(packet);
   cout << "Sending packet " << p.getSeqNumber() << " SYN " << endl;
   if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
       0) {
     throwError("Could not send to the server");
   }
+  p.startTimer();
+  p.setSent();
+  initWindow[0] = p;
+
   uint8_t buf[MSS + 1];
   int recvlen;
 
@@ -91,25 +94,73 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
       buf[recvlen] = 0;
       TCP_Packet rec;
       rec.convertBufferToPacket(buf);
-      if (rec.getAck()) {
-        cout << "Receiving packet " << rec.getSeqNumber() << endl;
+      cout << "Receiving packet " << rec.getSeqNumber() << endl;
+      if (rec.getAck() && rec.getSyn() &&
+          rec.getAckNumber() == initWindow[0].getSeqNumber()) {
+        // Ack for the initial Syn packet
 
+        initWindow[0].setAcked();
         // Send back a packet with the filename
-        TCP_Packet sendFilename;
-        sendFilename.setData((uint8_t *)fileName.c_str(), fileName.length());
-        sendFilename.setFlags(1, 0, 0);
-        sendFilename.setAckNumber(rec.getSeqNumber());
-        clientSeqNum += 1;
-        serverSeqNum = rec.getSeqNumber();
-        sendFilename.setSeqNumber(clientSeqNum);
-        sendFilename.convertPacketToBuffer(packet);
-        cout << "Sending packet " << sendFilename.getSeqNumber() << endl;
+        if (!initWindow[1].isSent()) {
+          TCP_Packet sendFilename;
+          sendFilename.setData((uint8_t *)fileName.c_str(), fileName.length());
+          sendFilename.setFlags(1, 0, 0);
+          sendFilename.setAckNumber(rec.getSeqNumber());
+          clientSeqNum += 1;
+          serverSeqNum = rec.getSeqNumber();
+          sendFilename.setSeqNumber(clientSeqNum);
+          sendFilename.convertPacketToBuffer(packet);
+          cout << "Sending packet " << sendFilename.getSeqNumber() << endl;
+          if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+                     sizeof(addr)) < 0) {
+            throwError("Could not send to the server");
+          }
+          sendFilename.startTimer();
+          sendFilename.setSent();
+          initWindow[1] = sendFilename;
+        } else {
+          // we are receiving the syn again, so reset the timer and resend the
+          // packet. It keeps its flags, ack number, data, and seq number, just
+          // the timer will be restarted.
+
+          initWindow[1].convertPacketToBuffer(packet);
+          if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+                     sizeof(addr)) < 0) {
+            throwError("Could not send to the server");
+          }
+          initWindow[1].startTimer();
+        }
+      } else if (rec.getAck() &&
+                 rec.getAckNumber() == initWindow[1].getSeqNumber()) {
+        // Ack for the filename packet
+        initWindow[1].setAcked();
+
+        // Now we wait for the file transmissions!
+      }
+      // else we just ignore it, since we are not dealing with that right now,
+      // JUST the initial handshake
+    }
+    // Always poll the other packets in the init window and see if we have to
+    // send anything to the server again!
+    int counter = 0;
+    for (int i = 0; i < 2; i++) {
+      if (initWindow[i].isSent() && initWindow[i].isAcked()) {
+        counter++;
+      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut()) {
+        initWindow[i].convertPacketToBuffer(packet);
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
                    sizeof(addr)) < 0) {
           throwError("Could not send to the server");
         }
-        return;
+        initWindow[i].startTimer();
       }
+      // else if it hasnt timed out or has not been sent yet, then we don't need
+      // to worry about it
+    }
+    if (counter == 2) {
+      // Both the packets were acked, so we can return from this and continue
+      // with receiving the files
+      return;
     }
   }
 }
