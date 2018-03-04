@@ -29,20 +29,21 @@ public:
   }
 
   TCP_Packet &operator=(const TCP_Packet &other) {
-    if (this != other) {
+    if (this != &other) {
       sent = other.sent;
       acked = other.acked;
       header.seqNumber = other.header.seqNumber;
       header.ackNumber = other.header.ackNumber;
-      header.dataLen = other.dataLen;
-      header.flags[0] = other.flags[0];
-      header.flags[1] = other.flags[1];
-      header.flags[2] = other.flags[2];
-      header.start = other.start;
+      header.dataLen = other.header.dataLen;
+      header.flags[0] = other.header.flags[0];
+      header.flags[1] = other.header.flags[1];
+      header.flags[2] = other.header.flags[2];
+      start = other.start;
       for (int i = 0; i < PACKET_SIZE; i++) {
         data[i] = other.data[i];
       }
     }
+    return *this;
   }
 
   // Getters:
@@ -68,7 +69,8 @@ public:
 
   void setData(uint8_t *buff, int len) {
     if (len > PACKET_SIZE) {
-      cout << "Data length larger than PACKET_SIZE. Not modifying data" << endl;
+      std::cout << "Data length larger than PACKET_SIZE. Not modifying data"
+                << std::endl;
       return;
     } else {
       for (int i = 0; i < len; i++) {
@@ -131,6 +133,6 @@ public:
     }
 
     return ((stop.tv_sec - start.tv_sec) +
-            (stop.tv_nsec - start.tv_nsec) / BILLION) < 0.5;
+            (stop.tv_nsec - start.tv_nsec) / BILLION) < RTO;
   }
 };

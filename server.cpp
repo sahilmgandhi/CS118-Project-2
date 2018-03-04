@@ -31,12 +31,14 @@ using namespace std;
 int port = 5000;
 uint16_t serverSeqNum = 0;
 uint16_t clientSeqNum = 0;
+
+TCP_Packet initWindow[2];
 TCP_Packet packetWindow[WINDOW / MSS];
 
 /**
- * This method throws the perror and exits the program
- * @param s           A string that is the error message
- **/
+     * This method throws the perror and exits the program
+     * @param s           A string that is the error message
+     **/
 void throwError(string s) {
   perror(s.c_str());
   exit(1);
@@ -103,16 +105,6 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
 }
 
 /**
- * Sends the FIN to the client
- **/
-void closeConnection() {}
-
-/**
- * Sends the ack back to the client when it sends a FIN
- **/
-void handleClose() {}
-
-/**
  * Send chunked file to the client
  * @param sockfd      The socket for the connection
  * @param their_addr  The sockaddr_in struct
@@ -149,6 +141,13 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
     }
   }
 }
+
+/**
+ * Sends the FIN to the client
+ * @param sockfd      The socket for the connection
+ * @param their_addr  The sockaddr_in struct
+ **/
+void closeConnection(int sockfd, struct sockaddr_in &their_addr) {}
 
 /**
  * This method will reap zombie processes (signal handler for it)
@@ -215,6 +214,6 @@ int main(int argc, char *argv[]) {
 
   sendChunkedFile(sockfd, their_addr, fileSize, fs, fileBuffer);
   delete fileBuffer;
-  closeConnection();
+  closeConnection(sockfd, their_addr);
   close(sockfd);
 }

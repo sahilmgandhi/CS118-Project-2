@@ -32,6 +32,8 @@ using namespace std;
 int port = 5000;
 uint16_t serverSeqNum = 0;
 uint16_t clientSeqNum = 0;
+
+TCP_Packet initWindow[2];
 TCP_Packet packetWindow[WINDOW / MSS];
 
 /**
@@ -71,6 +73,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
   p.setSeqNumber(clientSeqNum);
   p.setFlags(0, 1, 0);
   uint8_t packet[MSS];
+  initWindow[0] = p;
   p.convertPacketToBuffer(packet);
   cout << "Sending packet " << p.getSeqNumber() << " SYN " << endl;
   if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
@@ -82,8 +85,8 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
 
   // Receive SYN ACK
   while (1) {
-    recvlen =
-        recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+    recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
+                       (struct sockaddr *)&addr, &sin_size);
     if (recvlen > 0) {
       buf[recvlen] = 0;
       TCP_Packet rec;
@@ -134,14 +137,11 @@ void assembleFileFromChunks(vector<uint8_t> fileVector) {
 }
 
 /**
- * Send the FIN to close the connection
+ * Received a FIN from the server, and starting its own FIN sequence
+ * @param sockfd      Integer representing the socket number
+ * @param addr        The socaddr_in structure
  **/
-void closeConnection() {}
-
-/**
- * Send the ACK back for the fin from the server
- **/
-void handleClose() {}
+void closeConnection(int sockfd, struct sockaddr_in addr) {}
 
 int main(int argc, char *argv[]) {
   // <server hostname><server portnumber><filename> --> Inputs from the

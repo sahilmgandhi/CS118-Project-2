@@ -4,7 +4,7 @@
 #define PACKET_SIZE 1015
 #define HEADER_SIZE 9
 #define MSS 1024 // Packet + Header size
-#define RTO 500
+#define RTO 0.5  // In seconds (500 ms)
 
 #define MAXSEQ 30720 // This is a value in bytes
 #define WINDOW 5120  // This is a value in bytes
@@ -23,6 +23,6 @@
 #define INIT_SSTHRESH 15360
 
 // Random other Macros
-#define BILLION 1000000000L;
+#define BILLION 1000000000L
 
 #endif
