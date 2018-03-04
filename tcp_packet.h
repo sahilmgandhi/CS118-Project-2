@@ -1,5 +1,6 @@
 #include "globals.h"
 #include "stdint.h"
+#include <time.h>
 
 class TCP_Packet {
 
@@ -15,15 +16,33 @@ public:
     // set the cwnd for extra credit portion. Default is 5120 bytes (5 packets)
   } header;
 
+  // Member Variables
   uint8_t data[PACKET_SIZE] = {0}; // 1015 bytes for data
-
   bool sent = false;
   bool acked = false;
+  struct timespec start;
 
   // constructor
   TCP_Packet() {
     memset((char *)&data, 0, PACKET_SIZE);
     memset((char *)&header.flags, 0, FLAGS);
+  }
+
+  TCP_Packet &operator=(const TCP_Packet &other) {
+    if (this != other) {
+      sent = other.sent;
+      acked = other.acked;
+      header.seqNumber = other.header.seqNumber;
+      header.ackNumber = other.header.ackNumber;
+      header.dataLen = other.dataLen;
+      header.flags[0] = other.flags[0];
+      header.flags[1] = other.flags[1];
+      header.flags[2] = other.flags[2];
+      header.start = other.start;
+      for (int i = 0; i < PACKET_SIZE; i++) {
+        data[i] = other.data[i];
+      }
+    }
   }
 
   // Getters:
@@ -56,6 +75,12 @@ public:
         data[i] = buff[i];
       }
       header.dataLen = len;
+    }
+  }
+
+  void startTimer() {
+    if (clock_gettime(CLOCK_MONOTONIC, &start) == -1) {
+      perror("clock gettime");
     }
   }
 
@@ -95,5 +120,17 @@ public:
       memcpy(temp + 3 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &data,
              header.dataLen);
     }
+  }
+
+  // Misc functions
+  bool hasTimedOut() {
+    struct timespec stop;
+    if (clock_gettime(CLOCK_MONOTONIC, &stop) == -1) {
+      perror("clock gettime");
+      exit(EXIT_FAILURE);
+    }
+
+    return ((stop.tv_sec - start.tv_sec) +
+            (stop.tv_nsec - start.tv_nsec) / BILLION) < 0.5;
   }
 };

@@ -3,14 +3,6 @@
 // Project 2
 // This is the server code for the second project.
 
-// 1) Send file (< 1015 bytes)
-// 2) Send file (> 1015 bytes)
-// 3) Put things in the windows array
-// 4) Introduce timers
-// 5) Fin Sequence
-// 6) Handle packet drops
-// 7) Extra credit??
-
 #include <errno.h>
 #include <fcntl.h>
 #include <fstream>
@@ -122,17 +114,17 @@ void handleClose() {}
 
 /**
  * Send chunked file to the client
+ * @param sockfd      The socket for the connection
+ * @param their_addr  The sockaddr_in struct
+ * @param fileSize    The size of the file
+ * @param fs          The streampos (at the end of the file)
+ * @param fileBuffer  The buffer holding the contents of the file
  **/
 void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
                      long long fileSize, streampos fs, char *fileBuffer) {
   long numPackets = 0;
   uint8_t sendBuf[MSS];
   TCP_Packet p;
-  // Split file into packets and send them
-  // cout << fileSize << " " << fs << " " << endl;
-  // for (int i = 0; i < fs; i++) {
-  //   cout << char(fileBuffer[i]);
-  // }
   numPackets = fs / PACKET_SIZE + 1;
   for (long i = 0; i < numPackets; i++) {
     p.setFlags(0, 0, 0);
@@ -150,10 +142,6 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
       serverSeqNum += PACKET_SIZE;
     }
-    for (int j = 0; j < p.getLen(); j++) {
-      cout << char(p.data[j]);
-    }
-    cout << endl;
     p.convertPacketToBuffer(sendBuf);
     if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                sizeof(their_addr)) < 0) {
@@ -227,5 +215,6 @@ int main(int argc, char *argv[]) {
 
   sendChunkedFile(sockfd, their_addr, fileSize, fs, fileBuffer);
   delete fileBuffer;
+  closeConnection();
   close(sockfd);
 }

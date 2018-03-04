@@ -36,7 +36,7 @@ TCP_Packet packetWindow[WINDOW / MSS];
 
 /**
  * This method throws the perror and exits the program
- * @param s         A string that is the error message
+ * @param s           A string that is the error message
  **/
 void throwError(string s) {
   perror(s.c_str());
@@ -45,7 +45,7 @@ void throwError(string s) {
 
 /**
  * This method will reap zombie processes (signal handler for it)
- * @param sig       The signal for the signal handler
+ * @param sig         The signal for the signal handler
  **/
 void handle_sigchild(int sig) {
   while (waitpid((pid_t)(-1), 0, WNOHANG) > 0)
@@ -58,9 +58,9 @@ void handle_sigchild(int sig) {
 /**
  * Send the SYN to start the connection send the ACK to finsih the connection
  * and send the datafile name.
- * @param sockfd    Integer represendting the socket number
- * @param addr      The socaddr_in structure
- * @param fileName  The name of the file passed in!
+ * @param sockfd      Integer representing the socket number
+ * @param addr        The socaddr_in structure
+ * @param fileName    The name of the file passed in!
  **/
 void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
 
@@ -112,6 +112,28 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
 }
 
 /**
+ * Assemble the given file from chunks into a coherent file
+ * @param fileVector  The vector containing the raw file data
+ **/
+void assembleFileFromChunks(vector<uint8_t> fileVector) {
+  uint8_t *fileBuffer;
+  fileBuffer = new uint8_t[fileVector.size() + 1];
+  for (unsigned long i = 0; i < fileVector.size(); i++) {
+    fileBuffer[i] = fileVector[i];
+    cout << fileVector[i];
+  }
+  fileBuffer[fileVector.size()] = 0;
+  ofstream outFile;
+  outFile.open("received.data", ios::out | ios::binary);
+  if (outFile.is_open()) {
+    outFile.write((const char *)fileBuffer, (streamsize)(fileVector.size()));
+    outFile.close();
+  }
+
+  delete fileBuffer;
+}
+
+/**
  * Send the FIN to close the connection
  **/
 void closeConnection() {}
@@ -120,16 +142,6 @@ void closeConnection() {}
  * Send the ACK back for the fin from the server
  **/
 void handleClose() {}
-
-/**
- * Assemble the given file from chunks into a coherent file
- **/
-void assembleFileFromChunks() {}
-
-/**
- * Attach a timer to the different segments and poll them at a certain rate??
- **/
-void createSegmentTimer() {}
 
 int main(int argc, char *argv[]) {
   // <server hostname><server portnumber><filename> --> Inputs from the
@@ -188,20 +200,8 @@ int main(int argc, char *argv[]) {
     if (rec.getFin())
       break;
   }
-  fileBuffer = new uint8_t[fileVector.size() + 1];
-  for (unsigned long i = 0; i < fileVector.size(); i++) {
-    fileBuffer[i] = fileVector[i];
-    cout << fileVector[i];
-  }
-  fileBuffer[fileVector.size()] = 0;
-  ofstream outFile;
-  outFile.open("example.txt", ios::out | ios::binary);
-  if (outFile.is_open()) {
-    outFile.write((const char *)fileBuffer, (streamsize)(fileVector.size()));
-    outFile.close();
-  }
 
-  delete fileBuffer;
+  assembleFileFromChunks(fileVector);
   close(sockfd);
   return 0;
 }

@@ -1,0 +1,9 @@
+Todos:
+
+1) Send file (< 1015 bytes)               DONE
+2) Send file (> 1015 bytes)               DONE
+3) Fin Sequence                           In Progress
+4) Put things in the windows array        In Progress
+5) Introduce timers                       In Progress
+6) Handle packet drops
+7) Extra credit
