@@ -195,7 +195,58 @@ void assembleFileFromChunks(vector<uint8_t> fileVector) {
  * @param sockfd      Integer representing the socket number
  * @param addr        The socaddr_in structure
  **/
-void closeConnection(int sockfd, struct sockaddr_in addr) {}
+void closeConnection(int sockfd, struct sockaddr_in addr) {
+  // send SYN
+  TCP_Packet finPacket;
+  socklen_t sin_size;
+  uint8_t buf[MSS + 1];
+  clientSeqNum++;
+
+  finPacket.setSeqNumber(clientSeqNum);
+  finPacket.setAckNumber(clientSeqNum);
+  finPacket.setFlags(0, 0, 1);
+  uint8_t packet[MSS];
+  bool hasBeenReSent = false;
+  finPacket.convertPacketToBuffer(packet);
+  cout << "Sending packet " << finPacket.getAckNumber() << " FIN " << endl;
+  if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
+      0) {
+    throwError("Could not send to the server");
+  }
+  finPacket.startTimer();
+  finPacket.setSent();
+  int recvlen;
+
+  while (1) {
+    recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
+                       (struct sockaddr *)&addr, &sin_size);
+    if (recvlen > 0) {
+      buf[recvlen] = 0;
+      TCP_Packet recPacket;
+      recPacket.convertBufferToPacket(buf);
+
+      cout << "Receiving packet " << recPacket.getSeqNumber() << endl;
+      if (recPacket.getAck() &&
+          recPacket.getAckNumber() == finPacket.getSeqNumber()) {
+        // We have gotten the ack for the fin and can now end
+        break;
+      }
+    }
+    if (finPacket.hasTimedOut(1) && !finPacket.hasTimedOut(2) &&
+        !hasBeenReSent) {
+      cout << "Sending packet " << finPacket.getSeqNumber()
+           << " Retransmission "
+           << " FIN " << endl;
+      if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+                 sizeof(addr)) < 0) {
+        throwError("Could not send to the server");
+      }
+      hasBeenReSent = true;
+    } else if (finPacket.hasTimedOut(2) && hasBeenReSent) {
+      break;
+    }
+  }
+}
 
 int main(int argc, char *argv[]) {
   // <server hostname><server portnumber><filename> --> Inputs from the
@@ -242,7 +293,8 @@ int main(int argc, char *argv[]) {
   initiateConnection(sockfd, addr, fileName);
   // Then do other things here!
   while (1) {
-    recvlen = recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+    recvlen =
+        recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
     buf[recvlen] = 0;
     TCP_Packet rec;
     TCP_Packet ack;
@@ -250,11 +302,12 @@ int main(int argc, char *argv[]) {
     cout << "Receiving packet " << rec.getSeqNumber() << endl;
     rec.getData(data);
     ack.setAckNumber(rec.getSeqNumber());
-    ack.setSeqNumber(rec.getAckNumber()+1);
+    ack.setSeqNumber(rec.getAckNumber() + 1);
     ack.setFlags(1, 0, 0);
     ack.convertPacketToBuffer(packet);
     cout << "Sending packet " << ack.getAckNumber() << endl;
-    if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,sizeof(addr)) < 0) {
+    if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+               sizeof(addr)) < 0) {
       throwError("Could not send to the server");
     }
     ack.startTimer();
