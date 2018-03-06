@@ -125,7 +125,7 @@ public:
   }
 
   // Misc functions
-  bool hasTimedOut() {
+  bool hasTimedOut(int numRTO) {
     struct timespec stop;
     if (clock_gettime(CLOCK_MONOTONIC, &stop) == -1) {
       perror("clock gettime");
@@ -137,6 +137,6 @@ public:
     //           << std::endl;
     return ((long double)((stop.tv_sec - start.tv_sec) +
                           (long double)(stop.tv_nsec - start.tv_nsec) /
-                              BILLION) > RTO);
+                              BILLION) > numRTO*RTO);
   }
 };

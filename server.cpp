@@ -23,6 +23,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <vector>
 #include "globals.h"
 #include "tcp_packet.h"
 
@@ -33,7 +34,7 @@ uint16_t serverSeqNum = 0;
 uint16_t clientSeqNum = 0;
 
 TCP_Packet initWindow[2];
-TCP_Packet packetWindow[WINDOW / MSS];
+vector<TCP_Packet> packetWindow;
 
 /**
      * This method throws the perror and exits the program
@@ -124,7 +125,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
       }
       // poll iniwitWindow[0] (not 1, since its just an ack and has no timer)
       if (initWindow[0].isSent() && !initWindow[0].isAcked() &&
-          initWindow[0].hasTimedOut()) {
+          initWindow[0].hasTimedOut(1)) {
         initWindow[0].convertPacketToBuffer(sendBuf);
         cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
@@ -158,13 +159,11 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
     p.setAckNumber(clientSeqNum);
     cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
     if (i == numPackets - 1) {
-      cout << "in here" << endl;
       p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
                 (int)(fileSize - PACKET_SIZE * i));
       serverSeqNum += (uint16_t)(int)(fileSize - PACKET_SIZE * i);
       p.setFlags(0, 0, 1);
     } else {
-      cout << "in this one" << endl;
       p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
       serverSeqNum += PACKET_SIZE;
     }
@@ -188,8 +187,7 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {}
  * @param sig   The signal for the signal handler
  **/
 void handle_sigchild(int sig) {
-  while (waitpid((pid_t)(-1), 0, WNOHANG) > 0)
-    ;
+  while (waitpid((pid_t)(-1), 0, WNOHANG) > 0);
   fprintf(stderr,
           "Child exited successfully with code %d. Reaped child process.\n",
           sig);

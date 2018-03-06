@@ -147,7 +147,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
     for (int i = 0; i < 2; i++) {
       if (initWindow[i].isSent() && initWindow[i].isAcked()) {
         counter++;
-      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut()) {
+      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(1)) {
         initWindow[i].convertPacketToBuffer(packet);
         cout << "Sending packet " << initWindow[i].getSeqNumber() << endl;
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
