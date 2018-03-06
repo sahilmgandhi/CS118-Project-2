@@ -178,7 +178,7 @@ void assembleFileFromChunks(vector<uint8_t> fileVector) {
   fileBuffer = new uint8_t[fileVector.size() + 1];
   for (unsigned long i = 0; i < fileVector.size(); i++) {
     fileBuffer[i] = fileVector[i];
-    cout << fileVector[i];
+    //cout << fileVector[i];
   }
   fileBuffer[fileVector.size()] = 0;
   ofstream outFile;
