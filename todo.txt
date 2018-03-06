@@ -8,3 +8,5 @@ Todos:
 6) Handle seq number wrapping around
 7) Handle packet drops
 8) Extra credit
+
+9) Change the couts to follow the spec (retransmission, which is printing out the seq/ack, etc)

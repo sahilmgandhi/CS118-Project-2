@@ -30,8 +30,8 @@
 using namespace std;
 
 int port = 5000;
-uint16_t serverSeqNum = 0;
-uint16_t clientSeqNum = 0;
+long long serverSeqNum = 0;
+long long clientSeqNum = 0;
 
 TCP_Packet initWindow[2];
 vector<TCP_Packet> packetWindow;
@@ -180,14 +180,83 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
  * @param sockfd      The socket for the connection
  * @param their_addr  The sockaddr_in struct
  **/
-void closeConnection(int sockfd, struct sockaddr_in &their_addr) {}
+void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
+  int recvlen;
+  uint8_t buf[MSS + 1];
+  socklen_t sin_size = sizeof(struct sockaddr_in);
+  TCP_Packet finPacket;
+  TCP_Packet ackPacket;
+  TCP_Packet receivedPacket;
+  uint8_t sendBuf[MSS];
+
+  serverSeqNum++;
+
+  finPacket.setSeqNumber(serverSeqNum);
+  finPacket.setFlags(0, 0, 1);
+  finPacket.convertPacketToBuffer(sendBuf);
+  cout << "Sending packet " << finPacket.getSeqNumber() << " " << WINDOW
+       << " FIN " << endl;
+  if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
+      0) {
+    throwError("Could not send to the server");
+  }
+  finPacket.startTimer();
+  finPacket.setSent();
+
+  while (1) {
+    recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
+                       (struct sockaddr *)&their_addr, &sin_size);
+    if (recvlen > 0) {
+      buf[recvlen] = 0;
+      receivedPacket.convertPacketToBuffer(buf);
+      cout << "Receiving packet " << receivedPacket.getSeqNumber() << endl;
+      if (receivedPacket.getAck() &&
+          receivedPacket.getAckNumber() == finPacket.getSeqNumber()) {
+        // Ack for the finPacket that we sent, so now the server can be marked
+        // as closed
+        finPacket.setAcked();
+      } else if (receivedPacket.getFin()) {
+        // We received the client fin, so now we send back an ack and wait
+        // for 2 RTO before quitting
+        serverSeqNum++;
+        ackPacket.setSeqNumber(serverSeqNum);
+        ackPacket.setAckNumber(receivedPacket.getSeqNumber());
+        cout << "Sending packet " << ackPacket.getSeqNumber() << " " << WINDOW
+             << endl;
+        ackPacket.convertPacketToBuffer(sendBuf);
+        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&addr,
+                   sizeof(addr)) < 0) {
+          throwError("Could not send to the server");
+        }
+        ackPacket.setSent();
+        ackPacket.startTimer();
+      }
+    }
+    if (finPacket.isSent() && !finPacket.isAcked() &&
+        finPacket.hasTimedOut(1)) {
+      cout << "Sending packet " << finPacket.getSeqNumber()
+           << " Retransmission " << WINDOW << " FIN " << endl;
+      if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&addr,
+                 sizeof(addr)) < 0) {
+        throwError("Could not send to the server");
+      }
+      finPacket.startTimer();
+    } else if (ackPacket.isSent() && ackPacket.hasTimedOut(2)) {
+      cout << "Server is done transmitting and has timed out more than 2 RTO. "
+              "Closing server"
+           << endl;
+      break;
+    }
+  }
+}
 
 /**
  * This method will reap zombie processes (signal handler for it)
  * @param sig   The signal for the signal handler
  **/
 void handle_sigchild(int sig) {
-  while (waitpid((pid_t)(-1), 0, WNOHANG) > 0);
+  while (waitpid((pid_t)(-1), 0, WNOHANG) > 0)
+    ;
   fprintf(stderr,
           "Child exited successfully with code %d. Reaped child process.\n",
           sig);
@@ -234,6 +303,10 @@ int main(int argc, char *argv[]) {
    *is the same as the initWindow[1]'s ack number, and if it is, to resend the
    *ack)
    **/
+
+  // This opening and reading the file might take too long and as such the ack +
+  // fileName packet that is being sent might have been sent (once or more
+  // times) and may or may not be buffered.
 
   cout << fileName << endl;
 

@@ -256,6 +256,7 @@ int main(int argc, char *argv[]) {
   }
 
   assembleFileFromChunks(fileVector);
+  closeConnection(sockfd, addr);
   close(sockfd);
   return 0;
 }
