@@ -301,7 +301,7 @@ int main(int argc, char *argv[]) {
     if (fincounter > 0 && ack.hasTimedOut(5))
       fincounter = 10;
     recvlen =
-        recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+        recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT, (struct sockaddr *)&addr, &sin_size);
     if (recvlen > 0) {
       dup = 0;
       buf[recvlen] = 0;
