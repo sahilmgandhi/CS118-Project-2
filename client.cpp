@@ -94,7 +94,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
       buf[recvlen] = 0;
       TCP_Packet rec;
       rec.convertBufferToPacket(buf);
-      cout << "Receiving packet " << rec.getSeqNumber() << " lmao" << endl;
+      cout << "Receiving packet " << rec.getSeqNumber() << endl;
       if (rec.getAck() && rec.getSyn() &&
           rec.getAckNumber() == initWindow[0].getSeqNumber()) {
         // Ack for the initial Syn packet
