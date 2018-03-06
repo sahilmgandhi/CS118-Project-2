@@ -148,7 +148,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
     for (int i = 0; i < 2; i++) {
       if (initWindow[i].isSent() && initWindow[i].isAcked()) {
         counter++;
-      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(1)) {
+      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(2)) {
         initWindow[i].convertPacketToBuffer(packet);
         cout << "Sending packet " << initWindow[i].getSeqNumber() << endl;
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
@@ -233,7 +233,7 @@ void closeConnection(int sockfd, struct sockaddr_in addr) {
         break;
       }
     }
-    if (finPacket.hasTimedOut(1) && !finPacket.hasTimedOut(2) &&
+    if (finPacket.hasTimedOut(2) && !finPacket.hasTimedOut(2) &&
         !hasBeenReSent) {
       cout << "Sending packet " << finPacket.getSeqNumber()
            << " Retransmission "
@@ -279,6 +279,7 @@ int main(int argc, char *argv[]) {
   vector<uint8_t> fileVector;
   vector<TCP_Packet> packetWindow;
   int dup = 0;
+  int fincounter = 0;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -295,7 +296,9 @@ int main(int argc, char *argv[]) {
 
   initiateConnection(sockfd, addr, fileName);
   // Then do other things here!
-  while (1) {
+  while (fincounter < 10) {
+    if (ack.hasTimedOut(5))
+      fincounter = 10;
     recvlen =
         recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
     if (recvlen > 0) {
@@ -328,8 +331,10 @@ int main(int argc, char *argv[]) {
         packetWindow.push_back(rec);
         for (int i = 0; i < rec.getLen(); i++)
           fileVector.push_back(data[i]);
-        if (rec.getFin())
-          break;
+        if (rec.getFin()){
+          fincounter++;
+          ack.startTimer();
+        }
       }
     }
   }
