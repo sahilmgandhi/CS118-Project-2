@@ -109,6 +109,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
           clientSeqNum += 1;
           serverSeqNum = rec.getSeqNumber();
           sendFilename.setSeqNumber(clientSeqNum);
+          clientSeqNum += 1;
           sendFilename.convertPacketToBuffer(packet);
           cout << "Sending packet " << sendFilename.getSeqNumber() << endl;
           if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
@@ -225,6 +226,8 @@ int main(int argc, char *argv[]) {
   uint8_t packet[MSS];
   int recvlen;
   vector<uint8_t> fileVector;
+  vector<TCP_Packet> packetWindow;
+  int dup = 0;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -243,25 +246,38 @@ int main(int argc, char *argv[]) {
   // Then do other things here!
   while (1) {
     recvlen = recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
-    buf[recvlen] = 0;
-    TCP_Packet rec;
-    TCP_Packet ack;
-    rec.convertBufferToPacket(buf);
-    cout << "Receiving packet " << rec.getSeqNumber() << endl;
-    rec.getData(data);
-    ack.setAckNumber(rec.getSeqNumber());
-    ack.setSeqNumber(rec.getAckNumber()+1);
-    ack.setFlags(1, 0, 0);
-    ack.convertPacketToBuffer(packet);
-    cout << "Sending packet " << ack.getAckNumber() << endl;
-    if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,sizeof(addr)) < 0) {
-      throwError("Could not send to the server");
+    if (recvlen > 0){
+      dup = 0;
+      buf[recvlen] = 0;
+      TCP_Packet rec;
+      TCP_Packet ack;
+      rec.convertBufferToPacket(buf);
+      cout << "Receiving packet " << rec.getSeqNumber() << endl;
+      ack.setAckNumber(rec.getSeqNumber());
+      ack.setSeqNumber(clientSeqNum);
+      ack.setFlags(1, 0, 0);
+      ack.convertPacketToBuffer(packet);
+      
+      if (packetWindow.size() > 0)
+        for (unsigned long i = 0; i < packetWindow.size(); i++)
+          if(packetWindow[i].getSeqNumber() == rec.getSeqNumber()){
+            cout << "Sending packet " << ack.getAckNumber() << " Retransmission" << endl;
+            dup = 1;
+            break;
+          }
+      if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,sizeof(addr)) < 0)
+              throwError("Could not send to the server");
+      if (dup == 0){
+        cout << "Sending packet " << ack.getAckNumber() << endl;
+        rec.getData(data);
+        clientSeqNum++;
+        packetWindow.push_back(rec);
+        for (int i = 0; i < rec.getLen(); i++)
+          fileVector.push_back(data[i]);
+        if (rec.getFin())
+          break;
+      }
     }
-    ack.startTimer();
-    for (int i = 0; i < rec.getLen(); i++)
-      fileVector.push_back(data[i]);
-    if (rec.getFin())
-      break;
   }
 
   assembleFileFromChunks(fileVector);

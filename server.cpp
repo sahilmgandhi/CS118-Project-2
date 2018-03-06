@@ -82,7 +82,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
                << endl;
           if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                      sizeof(their_addr)) < 0) {
-            throwError("Could not send to the server");
+            throwError("Could not send to the client");
           }
           sendB.startTimer();
           sendB.setSent();
@@ -95,7 +95,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
                << endl;
           if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                      sizeof(their_addr)) < 0) {
-            throwError("Could not send to the server");
+            throwError("Could not send to the client");
           }
           initWindow[0].startTimer();
         }
@@ -116,7 +116,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
         cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
-          throwError("Could not send to the server");
+          throwError("Could not send to the client");
         }
         serverSeqNum += 1;
         sendB.setSent();
@@ -130,7 +130,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
         cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
-          throwError("Could not send to the server");
+          throwError("Could not send to the client");
         }
         initWindow[0].startTimer();
       }
@@ -176,7 +176,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       packetWindow.push_back(p);
       cout << "Sending packet " << p.getSeqNumber() << " " << WINDOW << endl;
       if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr, sizeof(their_addr)) < 0) 
-        throwError("Could not send to the server");
+        throwError("Could not send to the client");
       packetWindow.back().startTimer();
       i++;
     }
@@ -185,6 +185,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       buf[recvlen] = 0;
       ack.convertBufferToPacket(buf);
       cout << "Receiving packet " << ack.getAckNumber() << endl;
+      clientSeqNum = ack.getSeqNumber();
       for(unsigned long j = 0; j < packetWindow.size(); j++)
         if(packetWindow[j].getSeqNumber() == ack.getAckNumber())
           packetWindow[j].setAcked();
@@ -207,7 +208,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
            packetWindow[j].convertPacketToBuffer(sendBuf);
            cout << "Sending packet " << packetWindow[j].getSeqNumber() << " " << WINDOW << " Retransmission" << endl;
            if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,sizeof(their_addr)) < 0)
-             throwError("Could not send to the server");
+             throwError("Could not send to the client");
            packetWindow[j].startTimer();
         }
       }
