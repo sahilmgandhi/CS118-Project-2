@@ -222,9 +222,9 @@ int main(int argc, char *argv[]) {
   socklen_t sin_size;
   uint8_t buf[MSS + 1];
   uint8_t data[MSS];
+  uint8_t packet[MSS];
   int recvlen;
   vector<uint8_t> fileVector;
-  uint8_t *fileBuffer;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -242,13 +242,22 @@ int main(int argc, char *argv[]) {
   initiateConnection(sockfd, addr, fileName);
   // Then do other things here!
   while (1) {
-    recvlen =
-        recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
+    recvlen = recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
     buf[recvlen] = 0;
     TCP_Packet rec;
+    TCP_Packet ack;
     rec.convertBufferToPacket(buf);
     cout << "Receiving packet " << rec.getSeqNumber() << endl;
     rec.getData(data);
+    ack.setAckNumber(rec.getSeqNumber());
+    ack.setSeqNumber(rec.getAckNumber()+1);
+    ack.setFlags(1, 0, 0);
+    ack.convertPacketToBuffer(packet);
+    cout << "Sending packet " << ack.getAckNumber() << endl;
+    if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,sizeof(addr)) < 0) {
+      throwError("Could not send to the server");
+    }
+    ack.startTimer();
     for (int i = 0; i < rec.getLen(); i++)
       fileVector.push_back(data[i]);
     if (rec.getFin())

@@ -151,27 +151,66 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
                      long long fileSize, streampos fs, char *fileBuffer) {
   long numPackets = 0;
   uint8_t sendBuf[MSS];
+  uint8_t buf[MSS + 1];
+  int recvlen;
   TCP_Packet p;
+  TCP_Packet ack;
   numPackets = fs / PACKET_SIZE + 1;
-  for (long i = 0; i < numPackets; i++) {
-    p.setFlags(0, 0, 0);
-    p.setSeqNumber(serverSeqNum);
-    p.setAckNumber(clientSeqNum);
-    cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
-    if (i == numPackets - 1) {
-      p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
-                (int)(fileSize - PACKET_SIZE * i));
-      serverSeqNum += (uint16_t)(int)(fileSize - PACKET_SIZE * i);
-      p.setFlags(0, 0, 1);
-    } else {
-      p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
-      serverSeqNum += PACKET_SIZE;
+  socklen_t sin_size = sizeof(struct sockaddr_in);;
+  long i = 0;
+  while (1) {
+    if (i < numPackets && packetWindow.size() < WINDOW/MSS){
+      p.setFlags(0, 0, 0);
+      p.setSeqNumber(serverSeqNum);
+      p.setAckNumber(clientSeqNum);
+      if (i == numPackets - 1) {
+        p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), (int)(fileSize - PACKET_SIZE * i));
+        serverSeqNum += (uint16_t)(int)(fileSize - PACKET_SIZE * i);
+        p.setFlags(0,0,1);
+      } 
+      else {
+        p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
+        serverSeqNum += PACKET_SIZE;
+      }
+      p.convertPacketToBuffer(sendBuf);
+      packetWindow.push_back(p);
+      cout << "Sending packet " << p.getSeqNumber() << " " << WINDOW << endl;
+      if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr, sizeof(their_addr)) < 0) 
+        throwError("Could not send to the server");
+      packetWindow.back().startTimer();
+      i++;
     }
-    p.convertPacketToBuffer(sendBuf);
-    if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
-               sizeof(their_addr)) < 0) {
-      throwError("Could not send to the server");
+    recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT, (struct sockaddr *)&their_addr, &sin_size);
+    if(recvlen > 0){
+      buf[recvlen] = 0;
+      ack.convertBufferToPacket(buf);
+      cout << "Receiving packet " << ack.getAckNumber() << endl;
+      for(unsigned long j = 0; j < packetWindow.size(); j++)
+        if(packetWindow[j].getSeqNumber() == ack.getAckNumber())
+          packetWindow[j].setAcked();
+      while(1){
+        if(packetWindow[0].isAcked()){
+          if(packetWindow.size() > 1)
+            for(unsigned long k = 0; k < packetWindow.size()-1; k++)
+              packetWindow[k] = packetWindow[k+1];
+          packetWindow.pop_back();
+          if (packetWindow.size() == 0)
+            return;
+        }
+        else
+          break;
+      }
     }
+    else{
+      for(unsigned long j = 0; j < packetWindow.size(); j++)
+        if(packetWindow[j].hasTimedOut(1)){
+           packetWindow[j].convertPacketToBuffer(sendBuf);
+           cout << "Sending packet " << packetWindow[j].getSeqNumber() << " " << WINDOW << " Retransmission" << endl;
+           if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,sizeof(their_addr)) < 0)
+             throwError("Could not send to the server");
+           packetWindow[j].startTimer();
+        }
+      }
   }
 }
 
@@ -310,7 +349,7 @@ int main(int argc, char *argv[]) {
 
   cout << fileName << endl;
 
-  char *fileBuffer;
+  char *fileBuffer = nullptr;
   long long fileSize = 0;
   ifstream inFile;
 
