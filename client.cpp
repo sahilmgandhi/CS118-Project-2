@@ -278,6 +278,7 @@ int main(int argc, char *argv[]) {
   int recvlen;
   vector<uint8_t> fileVector;
   vector<TCP_Packet> packetWindow;
+  TCP_Packet ack;
   int dup = 0;
   int fincounter = 0;
 
@@ -297,7 +298,7 @@ int main(int argc, char *argv[]) {
   initiateConnection(sockfd, addr, fileName);
   // Then do other things here!
   while (fincounter < 10) {
-    if (ack.hasTimedOut(5))
+    if (fincounter > 0 && ack.hasTimedOut(5))
       fincounter = 10;
     recvlen =
         recvfrom(sockfd, buf, MSS, 0, (struct sockaddr *)&addr, &sin_size);
@@ -305,7 +306,7 @@ int main(int argc, char *argv[]) {
       dup = 0;
       buf[recvlen] = 0;
       TCP_Packet rec;
-      TCP_Packet ack;
+      
       rec.convertBufferToPacket(buf);
       cout << "Receiving packet " << rec.getSeqNumber() << endl;
       ack.setAckNumber(rec.getSeqNumber());
