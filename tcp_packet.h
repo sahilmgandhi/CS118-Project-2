@@ -33,6 +33,8 @@ public:
     if (this != &other) {
       sent = other.sent;
       acked = other.acked;
+      // std::cout << header.seqNumber << " other is " << other.header.seqNumber
+      //           << std::endl;
       header.seqNumber = other.header.seqNumber;
       header.ackNumber = other.header.ackNumber;
       header.dataLen = other.header.dataLen;

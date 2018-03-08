@@ -201,7 +201,7 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
         // Write the rest to the buffer:
         for (int i = 0; i < RECEIVEWINDOW; i++) {
           if (movingPackWind[i].isAcked()) {
-            cout << "Writing out to the file" << endl;
+            // cout << "Writing out to the file" << endl;
             movingPackWind[i].getData(data);
             for (int j = 0; j < movingPackWind[i].getLen(); j++) {
               fileVector.push_back(data[j]);
@@ -254,10 +254,10 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
         // here we have to push out the window and update lastWindSeq, or do
         // nothing!
         if (numPacketsToWriteToFile > 0) {
-
           // Write out the head of the window
           for (int i = 0; i < numPacketsToWriteToFile; i++) {
             if (movingPackWind[i].isAcked()) {
+              // cout << "Writing out 1 chunk " << endl;
               movingPackWind[i].getData(data);
               for (int j = 0; j < movingPackWind[i].getLen(); j++) {
                 fileVector.push_back(data[j]);
@@ -265,12 +265,15 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
             }
           }
           // Rotate the window
-          for (int i = 0; i < RECEIVEWINDOW - numPacketsToWriteToFile; i++) {
-            movingPackWind[i] = movingPackWind[i + 1];
+          for (int i = 0; i < (RECEIVEWINDOW - numPacketsToWriteToFile); i++) {
+            // cout << movingPackWind[i].getSeqNumber();
+            movingPackWind[i] = movingPackWind[i + numPacketsToWriteToFile];
+            // cout << " AFTER Rotating " << movingPackWind[i].getSeqNumber()
+            //      << endl;
           }
           int counter = 1;
           // Set the rest of the window
-          for (int i = RECEIVEWINDOW - numPacketsToWriteToFile;
+          for (int i = (RECEIVEWINDOW - numPacketsToWriteToFile);
                i < RECEIVEWINDOW; i++) {
             movingPackWind[i].setSeqNumber((lastWindSeq + counter * MSS) %
                                            MAXSEQ);
