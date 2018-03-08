@@ -119,7 +119,6 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
                    sizeof(their_addr)) < 0) {
           throwError("Could not send to the client");
         }
-        serverSeqNum += 1;
         sendB.setSent();
         sendB.startTimer();
         initWindow[1] = sendB;
