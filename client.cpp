@@ -30,7 +30,6 @@
 using namespace std;
 
 int port = 5000;
-uint16_t serverSeqNum = 0;
 uint16_t clientSeqNum = 0;
 
 TCP_Packet initWindow[2];
@@ -70,7 +69,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
   TCP_Packet p;
   socklen_t sin_size;
   clientSeqNum = rand() % 10000;
-  p.setSeqNumber(clientSeqNum);
+  p.setSeqNumber(clientSeqNum % MAXSEQ);
   p.setFlags(0, 1, 0);
   uint8_t packet[MSS];
   p.convertPacketToBuffer(packet);
@@ -105,10 +104,9 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
           TCP_Packet sendFilename;
           sendFilename.setData((uint8_t *)fileName.c_str(), fileName.length());
           sendFilename.setFlags(1, 0, 0);
-          sendFilename.setAckNumber(rec.getSeqNumber());
+          sendFilename.setAckNumber(rec.getSeqNumber() % MAXSEQ);
           clientSeqNum += 1;
-          serverSeqNum = rec.getSeqNumber();
-          sendFilename.setSeqNumber(clientSeqNum);
+          sendFilename.setSeqNumber(clientSeqNum % MAXSEQ);
           clientSeqNum += 1;
           sendFilename.convertPacketToBuffer(packet);
           cout << "Sending packet " << sendFilename.getSeqNumber() << endl;
@@ -136,8 +134,6 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
                  rec.getAckNumber() == initWindow[1].getSeqNumber()) {
         // Ack for the filename packet
         initWindow[1].setAcked();
-
-        // Now we wait for the file transmissions!
       }
       // else we just ignore it, since we are not dealing with that right now,
       // JUST the initial handshake
@@ -148,7 +144,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
     for (int i = 0; i < 2; i++) {
       if (initWindow[i].isSent() && initWindow[i].isAcked()) {
         counter++;
-      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(2)) {
+      } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(1)) {
         initWindow[i].convertPacketToBuffer(packet);
         cout << "Sending packet " << initWindow[i].getSeqNumber() << endl;
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
@@ -163,7 +159,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
     if (counter == 2) {
       // Both the packets were acked, so we can return from this and continue
       // with receiving the files
-      return;
+      break;
     }
     memset((char *)&buf, 0, MSS + 1);
   }
@@ -178,7 +174,7 @@ void assembleFileFromChunks(vector<uint8_t> fileVector) {
   fileBuffer = new uint8_t[fileVector.size() + 1];
   for (unsigned long i = 0; i < fileVector.size(); i++) {
     fileBuffer[i] = fileVector[i];
-    //cout << fileVector[i];
+    // cout << fileVector[i];
   }
   fileBuffer[fileVector.size()] = 0;
   ofstream outFile;
@@ -195,27 +191,43 @@ void assembleFileFromChunks(vector<uint8_t> fileVector) {
  * Received a FIN from the server, and starting its own FIN sequence
  * @param sockfd      Integer representing the socket number
  * @param addr        The socaddr_in structure
+ * @param finAckNum   The ack number to send back for the fin received to
+ *                    terminate the connection
  **/
-void closeConnection(int sockfd, struct sockaddr_in addr) {
+void closeConnection(int sockfd, struct sockaddr_in addr, int finAckNum) {
   // send SYN
   TCP_Packet finPacket;
+  TCP_Packet ackPacket;
   socklen_t sin_size;
   uint8_t buf[MSS + 1];
   clientSeqNum++;
 
-  finPacket.setSeqNumber(clientSeqNum);
-  finPacket.setAckNumber(clientSeqNum);
-  finPacket.setFlags(0, 0, 1);
+  ackPacket.setSeqNumber(clientSeqNum % MAXSEQ);
+  ackPacket.setAckNumber(finAckNum % MAXSEQ);
+  ackPacket.setFlags(1, 0, 0);
   uint8_t packet[MSS];
   bool hasBeenReSent = false;
+  ackPacket.convertPacketToBuffer(packet);
+  cout << "Sending packet " << ackPacket.getAckNumber() << endl;
+  if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
+      0) {
+    throwError("Could not send to the server");
+  }
+  ackPacket.setSent();
+
+  clientSeqNum++;
+  finPacket.setSeqNumber(clientSeqNum % MAXSEQ);
+  finPacket.setAckNumber((finAckNum + 1) % MAXSEQ);
+  finPacket.setFlags(0, 0, 1);
   finPacket.convertPacketToBuffer(packet);
   cout << "Sending packet " << finPacket.getAckNumber() << " FIN " << endl;
   if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
       0) {
     throwError("Could not send to the server");
   }
-  finPacket.startTimer();
   finPacket.setSent();
+  finPacket.startTimer();
+
   int recvlen;
 
   while (1) {
@@ -227,13 +239,22 @@ void closeConnection(int sockfd, struct sockaddr_in addr) {
       recPacket.convertBufferToPacket(buf);
 
       cout << "Receiving packet " << recPacket.getSeqNumber() << endl;
-      if (recPacket.getAck() &&
-          recPacket.getAckNumber() == finPacket.getSeqNumber()) {
+      if (recPacket.getFin() && recPacket.getSeqNumber() == finAckNum) {
+        // Duplicate fin from the server. Resend the ack for it
+        ackPacket.convertPacketToBuffer(packet);
+        cout << "Sending packet " << ackPacket.getAckNumber()
+             << " Retransmission " << endl;
+        if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+                   sizeof(addr)) < 0) {
+          throwError("Could not send to the server");
+        }
+      } else if (recPacket.getAck() &&
+                 recPacket.getAckNumber() == finPacket.getSeqNumber()) {
         // We have gotten the ack for the fin and can now end
         break;
       }
     }
-    if (finPacket.hasTimedOut(2) && !finPacket.hasTimedOut(2) &&
+    if (finPacket.hasTimedOut(1) && !finPacket.hasTimedOut(2) &&
         !hasBeenReSent) {
       cout << "Sending packet " << finPacket.getSeqNumber()
            << " Retransmission "
@@ -280,7 +301,7 @@ int main(int argc, char *argv[]) {
   vector<TCP_Packet> packetWindow;
   TCP_Packet ack;
   int dup = 0;
-  int fincounter = 0;
+  int finSeqNum = 0;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -296,52 +317,55 @@ int main(int argc, char *argv[]) {
   addr.sin_port = htons(port);
 
   initiateConnection(sockfd, addr, fileName);
-  // Then do other things here!
-  while (fincounter < 10) {
-    if (fincounter > 0 && ack.hasTimedOut(5))
-      fincounter = 10;
-    recvlen =
-        recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT, (struct sockaddr *)&addr, &sin_size);
+
+  while (1) {
+    recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
+                       (struct sockaddr *)&addr, &sin_size);
     if (recvlen > 0) {
       dup = 0;
       buf[recvlen] = 0;
       TCP_Packet rec;
-      
+
       rec.convertBufferToPacket(buf);
       cout << "Receiving packet " << rec.getSeqNumber() << endl;
-      ack.setAckNumber(rec.getSeqNumber());
-      ack.setSeqNumber(clientSeqNum);
+      if (rec.getFin()) {
+        finSeqNum = rec.getSeqNumber();
+        break;
+      }
+      ack.setAckNumber(rec.getSeqNumber() % MAXSEQ);
+      ack.setSeqNumber(clientSeqNum % MAXSEQ);
       ack.setFlags(1, 0, 0);
       ack.convertPacketToBuffer(packet);
 
-      if (packetWindow.size() > 0)
-        for (unsigned long i = 0; i < packetWindow.size(); i++)
+      if (packetWindow.size() > 0) {
+        for (unsigned long i = 0; i < packetWindow.size(); i++) {
           if (packetWindow[i].getSeqNumber() == rec.getSeqNumber()) {
             cout << "Sending packet " << ack.getAckNumber() << " Retransmission"
                  << endl;
             dup = 1;
             break;
           }
-      if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
-                 sizeof(addr)) < 0)
-        throwError("Could not send to the server");
+        }
+      }
       if (dup == 0) {
         cout << "Sending packet " << ack.getAckNumber() << endl;
+      }
+      if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
+                 sizeof(addr)) < 0) {
+        throwError("Could not send to the server");
+      }
+      if (dup == 0) {
         rec.getData(data);
         clientSeqNum++;
         packetWindow.push_back(rec);
         for (int i = 0; i < rec.getLen(); i++)
           fileVector.push_back(data[i]);
-        if (rec.getFin()){
-          fincounter++;
-          ack.startTimer();
-        }
       }
     }
   }
 
   assembleFileFromChunks(fileVector);
-  closeConnection(sockfd, addr);
+  closeConnection(sockfd, addr, finSeqNum);
   close(sockfd);
   return 0;
 }
