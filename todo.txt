@@ -1,6 +1,4 @@
 Todos:
 
 9) Change the couts to follow the spec (retransmission, which is printing out the seq/ack, etc)
-10 The client will  rst send a message to the server which includes the name of the  le requested.  If the  le exists,the server will divide the entire  le into multiple packets, and then add some header information to each packetbefore sending them to the client.  If the  le does not exist at server, the client should display 404 not founderror.
-
 8) Extra credit

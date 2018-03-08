@@ -37,6 +37,7 @@ TCP_Packet initWindow[2];
 TCP_Packet movingPackWind[RECEIVEWINDOW];
 int startWindSeq = 0;
 int lastWindSeq = 0;
+bool atLeastOnePacketWritten = false;
 // vector<TCP_Packet> packetWindow;
 vector<uint8_t> fileVector;
 
@@ -201,6 +202,7 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
         // Write the rest to the buffer:
         for (int i = 0; i < RECEIVEWINDOW; i++) {
           if (movingPackWind[i].isAcked()) {
+            atLeastOnePacketWritten = true;
             // cout << "Writing out to the file" << endl;
             movingPackWind[i].getData(data);
             for (int j = 0; j < movingPackWind[i].getLen(); j++) {
@@ -259,6 +261,7 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
             if (movingPackWind[i].isAcked()) {
               // cout << "Writing out 1 chunk " << endl;
               movingPackWind[i].getData(data);
+              atLeastOnePacketWritten = true;
               for (int j = 0; j < movingPackWind[i].getLen(); j++) {
                 fileVector.push_back(data[j]);
               }
@@ -438,8 +441,15 @@ int main(int argc, char *argv[]) {
   initiateConnection(sockfd, addr, fileName);
   initializeMovingWindow();
   finSeqNum = receiveFile(sockfd, addr);
+
   closeConnection(sockfd, addr, finSeqNum);
-  assembleFileFromChunks();
+  if (!atLeastOnePacketWritten) {
+    cout << "404 Error! The packet was not found on the server side! Closing "
+            "the client program"
+         << endl;
+  } else {
+    assembleFileFromChunks();
+  }
   close(sockfd);
   return 0;
 }

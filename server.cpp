@@ -353,22 +353,26 @@ int main(int argc, char *argv[]) {
   long long fileSize = 0;
   ifstream inFile;
 
-  // Open and read in file
-  inFile.open(fileName.c_str(), ios::in | ios::binary | ios::ate);
-  streampos fs;
-  if (inFile.is_open()) {
-    fs = inFile.tellg();
-    fileSize = (long long)(fs);
-    fileBuffer = new char[(long long)(fs) + 1];
-    inFile.seekg(0, ios::beg);
-    inFile.read(fileBuffer, fs);
-    inFile.close();
+  struct stat buffer;
+  int fileExists = 0;
+  fileExists = stat(fileName.c_str(), &buffer);
+
+  if (fileExists == 0) {
+    // Open and read in file
+    inFile.open(fileName.c_str(), ios::in | ios::binary | ios::ate);
+    streampos fs;
+    if (inFile.is_open()) {
+      fs = inFile.tellg();
+      fileSize = (long long)(fs);
+      fileBuffer = new char[(long long)(fs) + 1];
+      inFile.seekg(0, ios::beg);
+      inFile.read(fileBuffer, fs);
+      inFile.close();
+    }
+    sendChunkedFile(sockfd, their_addr, fileSize, fs, fileBuffer);
+    delete fileBuffer;
   }
-
-  sendChunkedFile(sockfd, their_addr, fileSize, fs, fileBuffer);
   closeConnection(sockfd, their_addr);
-
-  delete fileBuffer;
   close(sockfd);
   return 0;
 }
