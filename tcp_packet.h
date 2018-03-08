@@ -20,6 +20,7 @@ public:
   uint8_t data[PACKET_SIZE] = {0}; // 1015 bytes for data
   bool sent = false;
   bool acked = false;
+  long long trueFileSeqNum = 0;
   struct timespec start;
 
   // constructor
@@ -137,6 +138,11 @@ public:
     //           << std::endl;
     return ((long double)((stop.tv_sec - start.tv_sec) +
                           (long double)(stop.tv_nsec - start.tv_nsec) /
-                              BILLION) > numRTO*RTO);
+                              BILLION) > numRTO * RTO);
+  }
+
+  // Comparator for
+  bool sortBySeqNum(const TCP_Packet &lhs, const TCP_Packet &rhs) {
+    return lhs.trueFileSeqNum < rhs.trueFileSeqNum;
   }
 };

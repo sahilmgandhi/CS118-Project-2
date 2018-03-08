@@ -170,11 +170,12 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       if (i == numPackets - 1) {
         p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
                   (int)(fileSize - PACKET_SIZE * i));
-        serverSeqNum += (uint16_t)(int)(fileSize - PACKET_SIZE * i);
+        serverSeqNum += MSS;
+        // serverSeqNum += (uint16_t)(int)(fileSize - PACKET_SIZE * i);
         // p.setFlags(0, 0, 1);
       } else {
         p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
-        serverSeqNum += PACKET_SIZE;
+        serverSeqNum += MSS;
       }
       p.convertPacketToBuffer(sendBuf);
       packetWindow.push_back(p);
@@ -352,20 +353,6 @@ int main(int argc, char *argv[]) {
   // Initiate connection and get the fileName
   string fileName = initiateConnection(sockfd, their_addr);
 
-  /**
-   * So after initiateConnection, we still need to look at initWindow[1] and
-   * make sure that the ack is sent again if we receive the fileName. (ie we
-   *must keep polling the received packets to check that their sequence number
-   *is the same as the initWindow[1]'s ack number, and if it is, to resend the
-   *ack)
-   **/
-
-  // This opening and reading the file might take too long and as such the ack +
-  // fileName packet that is being sent might have been sent (once or more
-  // times) and may or may not be buffered.
-
-  cout << fileName << endl;
-
   char *fileBuffer = nullptr;
   long long fileSize = 0;
   ifstream inFile;
@@ -383,7 +370,9 @@ int main(int argc, char *argv[]) {
   }
 
   sendChunkedFile(sockfd, their_addr, fileSize, fs, fileBuffer);
-  delete fileBuffer;
   closeConnection(sockfd, their_addr);
+
+  delete fileBuffer;
   close(sockfd);
+  return 0;
 }
