@@ -152,7 +152,8 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
         counter++;
       } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(1)) {
         initWindow[i].convertPacketToBuffer(packet);
-        cout << "Sending packet " << initWindow[i].getSeqNumber() << endl;
+        cout << "Sending packet " << initWindow[i].getSeqNumber()
+             << " Retransmission " << endl;
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
                    sizeof(addr)) < 0) {
           throwError("Could not send to the server");
@@ -218,7 +219,7 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
       int numPacketsToWriteToFile = 0;
       for (int i = 1; i < 6; i++) {
         if (currSeqNum == ((lastWindSeq + i * MSS) % MAXSEQ)) {
-          cout << "in here " << i << " " << endl;
+          // cout << "in here " << i << " " << endl;
           numPacketsToWriteToFile = i;
           break;
         }
@@ -275,7 +276,7 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
                                            MAXSEQ);
             movingPackWind[i].resetAcked();
             movingPackWind[i].resetData();
-            cout << " Moving the window " << endl;
+            // cout << " Moving the window " << endl;
             counter++;
           }
           // Set the newly received ack:
@@ -380,7 +381,7 @@ void closeConnection(int sockfd, struct sockaddr_in addr, int finAckNum) {
     }
     if (finPacket.hasTimedOut(1) && !finPacket.hasTimedOut(2) &&
         !hasBeenReSent) {
-      cout << "Sending packet " << finPacket.getSeqNumber()
+      cout << "Sending packet " << finPacket.getAckNumber()
            << " Retransmission "
            << " FIN " << endl;
       if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
