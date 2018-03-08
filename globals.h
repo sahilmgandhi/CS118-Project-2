@@ -24,5 +24,6 @@
 
 // Random other Macros
 #define BILLION 1000000000L
+#define RECEIVEWINDOW 25
 
 #endif

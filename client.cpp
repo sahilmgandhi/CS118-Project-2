@@ -34,10 +34,10 @@ uint16_t clientSeqNum = 0;
 long long trueFileSeqNum = 0;
 
 TCP_Packet initWindow[2];
-TCP_Packet movingPackWind[26];
+TCP_Packet movingPackWind[RECEIVEWINDOW];
 int startWindSeq = 0;
 int lastWindSeq = 0;
-vector<TCP_Packet> packetWindow;
+// vector<TCP_Packet> packetWindow;
 vector<uint8_t> fileVector;
 
 /**
@@ -172,10 +172,10 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
 }
 
 void initializeMovingWindow() {
-  for (int i = 1; i < 27; i++) {
+  for (int i = 1; i < RECEIVEWINDOW + 1; i++) {
     movingPackWind[i - 1].setSeqNumber((startWindSeq + i * MSS) % MAXSEQ);
   }
-  lastWindSeq = movingPackWind[25].getSeqNumber();
+  lastWindSeq = movingPackWind[RECEIVEWINDOW - 1].getSeqNumber();
 }
 
 int receiveFile(int sockfd, struct sockaddr_in addr) {
@@ -198,11 +198,12 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
       cout << "Receiving packet " << rec.getSeqNumber() << endl;
       if (rec.getFin()) {
         // Write the rest to the buffer:
-        for (int i = 0; i < 26; i++) {
+        for (int i = 0; i < RECEIVEWINDOW; i++) {
           if (movingPackWind[i].isAcked()) {
+            cout << "Writing out to the file" << endl;
             movingPackWind[i].getData(data);
-            for (int i = 0; i < movingPackWind[i].getLen(); i++) {
-              fileVector.push_back(data[i]);
+            for (int j = 0; j < movingPackWind[i].getLen(); j++) {
+              fileVector.push_back(data[j]);
             }
           }
         }
@@ -215,20 +216,23 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
 
       int currSeqNum = rec.getSeqNumber();
       int numPacketsToWriteToFile = 0;
-      for (int i = 1; i < 5; i++) {
+      for (int i = 1; i < 6; i++) {
         if (currSeqNum == ((lastWindSeq + i * MSS) % MAXSEQ)) {
+          cout << "in here " << i << " " << endl;
           numPacketsToWriteToFile = i;
           break;
         }
       }
       if (numPacketsToWriteToFile == 0) {
-        for (int i = 0; i < 26; i++) {
+        for (int i = 0; i < RECEIVEWINDOW; i++) {
           if (movingPackWind[i].getSeqNumber() == rec.getSeqNumber() &&
               movingPackWind[i].isAcked()) {
             dup = 1;
             break;
           } else if (movingPackWind[i].getSeqNumber() == rec.getSeqNumber() &&
                      !movingPackWind[i].isAcked()) {
+            rec.getData(data);
+            movingPackWind[i].setData(data, rec.getLen());
             movingPackWind[i].setAcked();
             break;
           }
@@ -249,35 +253,38 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
         // here we have to push out the window and update lastWindSeq, or do
         // nothing!
         if (numPacketsToWriteToFile > 0) {
+
+          // Write out the head of the window
           for (int i = 0; i < numPacketsToWriteToFile; i++) {
             if (movingPackWind[i].isAcked()) {
               movingPackWind[i].getData(data);
-              for (int i = 0; i < movingPackWind[i].getLen(); i++) {
-                fileVector.push_back(data[i]);
+              for (int j = 0; j < movingPackWind[i].getLen(); j++) {
+                fileVector.push_back(data[j]);
               }
             }
           }
-          for (int i = 0; i < 26 - numPacketsToWriteToFile; i++) {
+          // Rotate the window
+          for (int i = 0; i < RECEIVEWINDOW - numPacketsToWriteToFile; i++) {
             movingPackWind[i] = movingPackWind[i + 1];
           }
           int counter = 1;
-          for (int i = 26 - numPacketsToWriteToFile; i < 26; i++) {
+          // Set the rest of the window
+          for (int i = RECEIVEWINDOW - numPacketsToWriteToFile;
+               i < RECEIVEWINDOW; i++) {
             movingPackWind[i].setSeqNumber((lastWindSeq + counter * MSS) %
                                            MAXSEQ);
+            movingPackWind[i].resetAcked();
+            movingPackWind[i].resetData();
+            cout << " Moving the window " << endl;
             counter++;
           }
-          lastWindSeq = movingPackWind[25].getSeqNumber();
+          // Set the newly received ack:
+          rec.getData(data);
+          movingPackWind[RECEIVEWINDOW - 1].setData(data, rec.getLen());
+          movingPackWind[RECEIVEWINDOW - 1].setAcked();
+          lastWindSeq = movingPackWind[RECEIVEWINDOW - 1].getSeqNumber();
         }
       }
-
-      if (dup == 0) {
-        rec.getData(data);
-        clientSeqNum++;
-        packetWindow.push_back(rec);
-        for (int i = 0; i < rec.getLen(); i++)
-          fileVector.push_back(data[i]);
-      }
-      dup = 0; // reset the dup flag
     }
   }
 }

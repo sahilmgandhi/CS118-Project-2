@@ -56,7 +56,9 @@ public:
   bool getFin() { return header.flags[2] == 1; }
   uint16_t getSeqNumber() { return header.seqNumber; }
   uint16_t getAckNumber() { return header.ackNumber; }
+
   void getData(uint8_t *buff) {
+    memset((char *)buff, 0, MSS);
     for (int i = 0; i < header.dataLen; i++)
       buff[i] = data[i];
   }
@@ -80,6 +82,14 @@ public:
       header.dataLen = len;
     }
   }
+
+  void resetData() {
+    for (int i = 0; i < PACKET_SIZE; i++) {
+      data[i] = 0;
+    }
+  }
+
+  void resetAcked() { acked = false; }
 
   void startTimer() {
     if (clock_gettime(CLOCK_MONOTONIC, &start) == -1) {

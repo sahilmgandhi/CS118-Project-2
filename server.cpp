@@ -164,8 +164,6 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
     // lost:
     if (i < numPackets && packetWindow.size() < WINDOW / MSS) {
       p.setFlags(0, 0, 0);
-      p.setSeqNumber(serverSeqNum % MAXSEQ);
-      p.setAckNumber(clientSeqNum);
       if (i == numPackets - 1) {
         p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
                   (int)(fileSize - PACKET_SIZE * i));
@@ -176,6 +174,8 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
         p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
         serverSeqNum += MSS;
       }
+      p.setSeqNumber(serverSeqNum % MAXSEQ);
+      p.setAckNumber(clientSeqNum);
       p.convertPacketToBuffer(sendBuf);
       packetWindow.push_back(p);
       cout << "Sending packet " << p.getSeqNumber() << " " << WINDOW << endl;
