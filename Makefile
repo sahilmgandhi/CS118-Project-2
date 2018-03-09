@@ -13,3 +13,6 @@ clean:
 	rm -rf p2_server p2_client
 	rm $project2_(UID1)_(UID2).tar
 
+ec:
+	$(CC) -Wall -Wextra -g -o ec_p2_server -I. ec_server.cpp
+	$(CC) -Wall -Wextra -g -o ec_p2_client -I. ec_client.cpp
