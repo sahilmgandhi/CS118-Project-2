@@ -210,10 +210,9 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
           numDuplicateAcks++;
         } else {
           numDuplicateAcks = 0;
-          if (inFastRetransmission &&
-              ack.getAckNumber() == packetWindow[0].getSeqNumber()) {
+          if (inFastRetransmission) {
             inFastRetransmission = false;
-            cWindowSize = ssThreshold + MSS;
+            cWindowSize = ssThreshold;
           }
         }
         // Remember, these are cummulative acks now
