@@ -163,7 +163,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
 
 void setSendAckNum() {
   sort(packetWindow.begin(), packetWindow.end());
-  for (int i = 0; i < packetWindow.size() - 1; i++) {
+  for (unsigned int i = 0; i < packetWindow.size() - 1; i++) {
     if (packetWindow[i].getSeqNumber() + MSS !=
         packetWindow[i + 1].getSeqNumber()) {
       ackToSend = packetWindow[i].getSeqNumber() + MSS;
@@ -213,7 +213,7 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
         }
         if (dup == 0) {
           atLeastOnePacketWritten = true;
-          rec.getData(data);
+          // rec.getData(data);
           clientSeqNum++;
           packetWindow.push_back(rec);
           uint32_t oldAck = ackToSend;
@@ -242,15 +242,16 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
  **/
 void assembleFileFromChunks() {
   uint8_t *fileBuffer;
-  for (int i = 0; i < packetWindow.size(); i++) {
+  uint8_t data[MSS];
+  for (unsigned int i = 0; i < packetWindow.size(); i++) {
+    packetWindow[i].getData(data);
     for (int j = 0; j < packetWindow[i].getLen(); j++) {
-      fileVector.push_back(packetWindow[i].data[j]);
+      fileVector.push_back(data[j]);
     }
   }
   fileBuffer = new uint8_t[fileVector.size() + 1];
   for (unsigned long i = 0; i < fileVector.size(); i++) {
     fileBuffer[i] = fileVector[i];
-    // cout << fileVector[i];
   }
   fileBuffer[fileVector.size()] = 0;
   ofstream outFile;

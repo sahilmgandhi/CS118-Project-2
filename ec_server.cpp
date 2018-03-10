@@ -25,7 +25,7 @@
 #include <cstdlib>
 #include <deque>
 #include "globals.h"
-#include "tcp_packet.h"
+#include "ec_tcp_packet.h"
 
 using namespace std;
 
@@ -33,8 +33,8 @@ int port = 5000;
 long long serverSeqNum = 0;
 long long clientSeqNum = 0;
 
-TCP_Packet initWindow[2];
-deque<TCP_Packet> packetWindow;
+EC_TCP_Packet initWindow[2];
+deque<EC_TCP_Packet> packetWindow;
 
 long ssThreshold = 15360; // 15360 bytes, aka 5 packets to start
 long cWindowSize = 1024;  // 1024 bytes, aka 1 packet to start
@@ -60,8 +60,8 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
   int recvlen;
   uint8_t buf[MSS + 1];
   socklen_t sin_size = sizeof(struct sockaddr_in);
-  TCP_Packet p;
-  TCP_Packet sendB;
+  EC_TCP_Packet p;
+  EC_TCP_Packet sendB;
   uint8_t sendBuf[MSS];
   string fileName = "";
 
@@ -145,13 +145,6 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
   }
 }
 
-void fastRetransmitAndRecovery(int sockfd, struct sockaddr_in &their_addr,
-                               long long fileSize, char *fileBuffer,
-                               uint32_t chunkToResend, long prevFileChunk) {
-  // In here we want to do the fast retransmission, and also want to do fast
-  // recovery
-}
-
 /**
  * Send chunked file to the client
  * @param sockfd      The socket for the connection
@@ -166,9 +159,9 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
   uint8_t sendBuf[MSS];
   uint8_t buf[MSS + 1];
   int recvlen;
-  TCP_Packet p;
-  TCP_Packet ack;
-  numPackets = fs / PACKET_SIZE + 1;
+  EC_TCP_Packet p;
+  EC_TCP_Packet ack;
+  numPackets = fs / EC_PACKET_SIZE + 1;
   socklen_t sin_size = sizeof(struct sockaddr_in);
   long currFileChunk = 0;
   uint32_t prevAckNum = 0;
@@ -178,18 +171,17 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
     if (currFileChunk < numPackets && packetWindow.size() < cWindowSize / MSS) {
       p.setFlags(0, 0, 0);
       if (currFileChunk == numPackets - 1) {
-        p.setData((uint8_t *)(fileBuffer + currFileChunk * PACKET_SIZE),
-                  (int)(fileSize - PACKET_SIZE * currFileChunk));
+        p.setData((uint8_t *)(fileBuffer + currFileChunk * EC_PACKET_SIZE),
+                  (int)(fileSize - EC_PACKET_SIZE * currFileChunk));
       } else {
-        p.setData((uint8_t *)(fileBuffer + currFileChunk * PACKET_SIZE),
-                  PACKET_SIZE);
+        p.setData((uint8_t *)(fileBuffer + currFileChunk * EC_PACKET_SIZE),
+                  EC_PACKET_SIZE);
       }
       serverSeqNum += MSS;
       p.setSeqNumber(serverSeqNum % EC_MAXSEQ);
       p.setAckNumber(clientSeqNum);
       p.convertPacketToBuffer(sendBuf);
       packetWindow.push_back(p);
-      // cout << "Sending chunk " << i << endl;
       cout << "Sending packet " << p.getSeqNumber() << " " << cWindowSize << " "
            << ssThreshold << endl;
       if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
@@ -204,65 +196,76 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       buf[recvlen] = 0;
       ack.convertBufferToPacket(buf);
       cout << "Receiving packet " << ack.getAckNumber() << endl;
-      clientSeqNum = ack.getSeqNumber();
-
-      if (ack.getAckNumber() == prevAckNum) {
-        numDuplicateAcks++;
-      } else {
-        numDuplicateAcks = 0;
-      }
-      // Remember, these are cummulative acks now
-      prevAckNum = ack.getAckNumber();
-
-      // Filter out all packets until the acknum here:
-      int numPacketsToFilter = 0;
-      for (int i = 0; i < packetWindow.size(); i++) {
-        if (packetWindow[i].getSeqNumber() == prevAckNum) {
-          numPacketsToFilter = i;
-          break;
-        }
-      }
-      if (prevAckNum ==
-          packetWindow[packetWindow.size() - 1].getSeqNumber() + MSS) {
-        // cummulative ack outside of window, so get rid of all of them!
-        numPacketsToFilter = packetWindow.size();
-      }
-      for (int i = 0; i < numPacketsToFilter; i++) {
-        packetWindow.pop_front(); // pop out the front of the deque
-      }
-      if (packetWindow.size() == 0 && currFileChunk >= numPackets) {
-        break;
-      }
-
-      // Based on num duplicate Acks, we need to do logic here:
-      if (numDuplicateAcks == 3) {
-        inFastRetransmission = true;
-        ssThreshold = (ssThreshold / 2);
-        cWindowSize = ssThreshold + 3 * MSS;
-        // Go into fast recovery here
-        packetWindow[0].convertPacketToBuffer(sendBuf);
-        // cout << "Sending chunk " << i << endl;
-        cout << "Sending packet " << p.getSeqNumber() << " " << cWindowSize
-             << " " << ssThreshold << endl;
+      if (ack.getSeqNumber() == initWindow[1].getAckNumber()) {
+        initWindow[1].convertPacketToBuffer(sendBuf);
+        cout << "Sending packet " << initWindow[1].getSeqNumber() << " "
+             << WINDOW << " Retransmission" << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0)
           throwError("Could not send to the client");
-        packetWindow[0].startTimer();
-        // fastRetransmitAndRecovery(sockfd, their_addr, fileSize, fileBuffer,
-        //                           prevAckNum, currFileChunk);
       } else {
-        if (numDuplicateAcks > 3) {
-          cWindowSize += MSS;
-        } else if (cWindowSize == ssThreshold) {
-          // Still in slow start
-          cWindowSize += MSS;
-        } else if (cWindowSize > ssThreshold) {
-          // Congestion Avoidance
-          cWindowSize += (1.0 / (cWindowSize / MSS)) * MSS;
+        clientSeqNum = ack.getSeqNumber();
+
+        if (ack.getAckNumber() == prevAckNum) {
+          numDuplicateAcks++;
+        } else {
+          numDuplicateAcks = 0;
+          if (inFastRetransmission &&
+              ack.getAckNumber() == packetWindow[0].getSeqNumber()) {
+            inFastRetransmission = false;
+            cWindowSize = ssThreshold + MSS;
+          }
+        }
+        // Remember, these are cummulative acks now
+        prevAckNum = ack.getAckNumber();
+
+        // Filter out all packets until the acknum here:
+        int numPacketsToFilter = 0;
+        for (unsigned int i = 0; i < packetWindow.size(); i++) {
+          if (packetWindow[i].getSeqNumber() == prevAckNum) {
+            numPacketsToFilter = i;
+            break;
+          }
+        }
+        if (prevAckNum ==
+            (packetWindow[packetWindow.size() - 1].getSeqNumber() + MSS)) {
+          // cummulative ack outside of window, so get rid of all of them!
+          numPacketsToFilter = packetWindow.size();
+        }
+        for (int i = 0; i < numPacketsToFilter; i++) {
+          packetWindow.pop_front(); // pop out the front of the deque
+        }
+        if (packetWindow.size() == 0 && currFileChunk >= numPackets) {
+          break;
+        }
+
+        // Based on num duplicate Acks, we need to do logic here:
+        if (numDuplicateAcks == 3) {
+          inFastRetransmission = true;
+          ssThreshold = max(2 * MSS, (int)(ssThreshold / 2));
+          cWindowSize = ssThreshold + 3 * MSS;
+          // Go into fast recovery here
+          packetWindow[0].convertPacketToBuffer(sendBuf);
+          cout << "Sending packet " << packetWindow[0].getSeqNumber() << " "
+               << cWindowSize << " " << ssThreshold << endl;
+          if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                     sizeof(their_addr)) < 0)
+            throwError("Could not send to the client");
+          packetWindow[0].startTimer();
+        } else {
+          if (numDuplicateAcks > 3) {
+            cWindowSize += MSS;
+          } else if (cWindowSize <= ssThreshold) {
+            // Still in slow start
+            cWindowSize += MSS;
+          } else if (cWindowSize > ssThreshold) {
+            // Congestion Avoidance
+            cWindowSize += (1.0 / (cWindowSize / MSS)) * MSS;
+          }
         }
       }
     }
-    for (unsigned long j = 0; j < packetWindow.size(); j++)
+    for (unsigned int j = 0; j < packetWindow.size(); j++)
       if (packetWindow[j].hasTimedOut(1)) {
         packetWindow[j].convertPacketToBuffer(sendBuf);
         cout << "Sending packet " << packetWindow[j].getSeqNumber() << " "
@@ -274,7 +277,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
 
         // In timeout, so ssThreshold = max(cwnd/2, 2*mss)
         ssThreshold = max((int)cWindowSize / 2, 2 * MSS);
-        cWindowSize = 1;
+        cWindowSize = MSS;
       }
   }
 }
@@ -289,9 +292,9 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
   int retryFin = 0;
   uint8_t buf[MSS + 1];
   socklen_t sin_size = sizeof(struct sockaddr_in);
-  TCP_Packet ackPacket;
-  TCP_Packet receivedPacket;
-  TCP_Packet finPacket;
+  EC_TCP_Packet ackPacket;
+  EC_TCP_Packet receivedPacket;
+  EC_TCP_Packet finPacket;
   uint8_t sendBuf[MSS];
   finPacket.setFlags(0, 0, 1);
   serverSeqNum++;
@@ -383,7 +386,6 @@ int main(int argc, char *argv[]) {
   int sockfd;
   struct sockaddr_in my_addr;
   struct sockaddr_in their_addr;
-  socklen_t sin_size;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -395,7 +397,6 @@ int main(int argc, char *argv[]) {
 
   if (::bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0)
     throwError("bind");
-  sin_size = sizeof(struct sockaddr_in);
 
   // Initiate connection and get the fileName
   string fileName = initiateConnection(sockfd, their_addr);

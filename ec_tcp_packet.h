@@ -13,15 +13,12 @@ public:
     // pos 0 = ack, pos 1 = syn, pos 2 = fin
     uint8_t flags[FLAGS] = {0}; // 3 bytes
     uint16_t dataLen = 0;       // 2 bytes
-    // uint32_t cwnd = 0;          // 4 bytes
-    // set the cwnd for extra credit portion. Default is 5120 bytes (5 packets)
-  } header; // Total Header Size = 13 Bytes
+  } header;                     // Total Header Size = 13 Bytes
 
   // Member Variables
-  uint8_t data[EC_PACKET_SIZE] = {0}; // 1015 bytes for data
+  uint8_t data[EC_PACKET_SIZE] = {0}; // 1011 bytes for data
   bool sent = false;
   bool acked = false;
-  long long trueFileSeqNum = 0;
   struct timespec start;
 
   // constructor
@@ -37,7 +34,6 @@ public:
       header.seqNumber = other.header.seqNumber;
       header.ackNumber = other.header.ackNumber;
       header.dataLen = other.header.dataLen;
-      // header.cwnd = other.header.cwnd;
       header.flags[0] = other.header.flags[0];
       header.flags[1] = other.header.flags[1];
       header.flags[2] = other.header.flags[2];
@@ -108,33 +104,38 @@ public:
 
   // Converters from Stream to Packet and Vice Versa
   void convertBufferToPacket(uint8_t *buff) {
-    header.seqNumber = (buff[1] << 8) | buff[0];
-    header.ackNumber = (buff[3] << 8) | buff[2];
-    header.flags[0] = buff[4];
-    header.flags[1] = buff[5];
-    header.flags[2] = buff[6];
-    header.dataLen = (buff[8] << 8) | buff[7];
+    header.seqNumber = (buff[3] << 24) | (buff[2] << 16);
+    header.seqNumber |= (buff[1] << 8);
+    header.seqNumber |= buff[0];
+    header.ackNumber = (buff[7] << 24) | (buff[6] << 16);
+    header.ackNumber |= (buff[5] << 8);
+    header.ackNumber |= buff[4];
+    header.flags[0] = buff[8];
+    header.flags[1] = buff[9];
+    header.flags[2] = buff[10];
+    header.dataLen = (buff[12] << 8) | buff[11];
 
     for (int i = 0; i < header.dataLen; i++) {
-      data[i] = buff[9 + i];
+      data[i] = buff[13 + i];
     }
   }
 
   void convertPacketToBuffer(uint8_t *temp) {
     memset((char *)temp, 0, MSS);
 
-    memcpy(temp, &header.seqNumber, sizeof(uint16_t));
-    memcpy(temp + sizeof(uint16_t), &header.ackNumber, sizeof(uint16_t));
-    memcpy(temp + 2 * sizeof(uint16_t), &header.flags[0], sizeof(uint8_t));
-    memcpy(temp + 2 * sizeof(uint16_t) + sizeof(uint8_t), &header.flags[1],
+    memcpy(temp, &header.seqNumber, sizeof(uint32_t));
+    memcpy(temp + sizeof(uint32_t), &header.ackNumber, sizeof(uint32_t));
+    memcpy(temp + 2 * sizeof(uint32_t), &header.flags[0], sizeof(uint8_t));
+    memcpy(temp + 2 * sizeof(uint32_t) + sizeof(uint8_t), &header.flags[1],
            sizeof(uint8_t));
-    memcpy(temp + 2 * sizeof(uint16_t) + 2 * sizeof(uint8_t), &header.flags[2],
+    memcpy(temp + 2 * sizeof(uint32_t) + 2 * sizeof(uint8_t), &header.flags[2],
            sizeof(uint8_t));
-    memcpy(temp + 2 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &header.dataLen,
+    memcpy(temp + 2 * sizeof(uint32_t) + 3 * sizeof(uint8_t), &header.dataLen,
            sizeof(uint16_t));
     if (header.dataLen > 0) {
-      memcpy(temp + 3 * sizeof(uint16_t) + 3 * sizeof(uint8_t), &data,
-             header.dataLen);
+      memcpy(temp + sizeof(uint16_t) + 2 * sizeof(uint32_t) +
+                 3 * sizeof(uint8_t),
+             &data, header.dataLen);
     }
   }
 
