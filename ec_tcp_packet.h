@@ -37,7 +37,7 @@ public:
       header.seqNumber = other.header.seqNumber;
       header.ackNumber = other.header.ackNumber;
       header.dataLen = other.header.dataLen;
-      header.cwnd = other.header.cwnd;
+      // header.cwnd = other.header.cwnd;
       header.flags[0] = other.header.flags[0];
       header.flags[1] = other.header.flags[1];
       header.flags[2] = other.header.flags[2];
@@ -58,7 +58,7 @@ public:
   bool getFin() { return header.flags[2] == 1; }
   uint32_t getSeqNumber() { return header.seqNumber; }
   uint32_t getAckNumber() { return header.ackNumber; }
-  uint32_t getCwnd() { return header.cwnd; }
+  // uint32_t getCwnd() { return header.cwnd; }
 
   void getData(uint8_t *buff) {
     memset((char *)buff, 0, MSS);

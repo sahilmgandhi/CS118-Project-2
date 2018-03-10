@@ -244,7 +244,7 @@ void assembleFileFromChunks() {
   uint8_t *fileBuffer;
   for (int i = 0; i < packetWindow.size(); i++) {
     for (int j = 0; j < packetWindow[i].getLen(); j++) {
-      fileVector.push_back(packetWindow[i].data[j]));
+      fileVector.push_back(packetWindow[i].data[j]);
     }
   }
   fileBuffer = new uint8_t[fileVector.size() + 1];

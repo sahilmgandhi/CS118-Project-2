@@ -23,7 +23,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <cstdlib>
-#include <vector>
+#include <deque>
 #include "globals.h"
 #include "tcp_packet.h"
 
@@ -34,15 +34,12 @@ long long serverSeqNum = 0;
 long long clientSeqNum = 0;
 
 TCP_Packet initWindow[2];
-vector<TCP_Packet> packetWindow;
+deque<TCP_Packet> packetWindow;
 
 long ssThreshold = 15360; // 15360 bytes, aka 5 packets to start
 long cWindowSize = 1024;  // 1024 bytes, aka 1 packet to start
 
-bool inSlowStart = true; // start off in Slow Start, set the rest to 0
-bool inFastRecovery = false;
 bool inFastRetransmission = false;
-bool inCongestionAvoidance = false;
 
 /**
              * This method throws the perror and exits the program
@@ -148,6 +145,13 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
   }
 }
 
+void fastRetransmitAndRecovery(int sockfd, struct sockaddr_in &their_addr,
+                               long long fileSize, char *fileBuffer,
+                               uint32_t chunkToResend, long prevFileChunk) {
+  // In here we want to do the fast retransmission, and also want to do fast
+  // recovery
+}
+
 /**
  * Send chunked file to the client
  * @param sockfd      The socket for the connection
@@ -166,17 +170,19 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
   TCP_Packet ack;
   numPackets = fs / PACKET_SIZE + 1;
   socklen_t sin_size = sizeof(struct sockaddr_in);
-  long i = 0;
+  long currFileChunk = 0;
+  uint32_t prevAckNum = 0;
   int numDuplicateAcks = 0;
 
   while (1) {
-    if (i < numPackets && packetWindow.size() < cWindowSize / MSS) {
+    if (currFileChunk < numPackets && packetWindow.size() < cWindowSize / MSS) {
       p.setFlags(0, 0, 0);
-      if (i == numPackets - 1) {
-        p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
-                  (int)(fileSize - PACKET_SIZE * i));
+      if (currFileChunk == numPackets - 1) {
+        p.setData((uint8_t *)(fileBuffer + currFileChunk * PACKET_SIZE),
+                  (int)(fileSize - PACKET_SIZE * currFileChunk));
       } else {
-        p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE), PACKET_SIZE);
+        p.setData((uint8_t *)(fileBuffer + currFileChunk * PACKET_SIZE),
+                  PACKET_SIZE);
       }
       serverSeqNum += MSS;
       p.setSeqNumber(serverSeqNum % EC_MAXSEQ);
@@ -190,7 +196,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
                  sizeof(their_addr)) < 0)
         throwError("Could not send to the client");
       packetWindow.back().startTimer();
-      i++;
+      currFileChunk++;
     }
     recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
                        (struct sockaddr *)&their_addr, &sin_size);
@@ -198,23 +204,62 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       buf[recvlen] = 0;
       ack.convertBufferToPacket(buf);
       cout << "Receiving packet " << ack.getAckNumber() << endl;
-
       clientSeqNum = ack.getSeqNumber();
-      for (unsigned long j = 0; j < packetWindow.size(); j++)
-        if (packetWindow[j].getSeqNumber() == ack.getAckNumber())
-          packetWindow[j].setAcked();
-      while (1) {
-        if (packetWindow.size() > 0 && packetWindow[0].isAcked()) {
-          if (packetWindow.size() > 1) {
-            for (unsigned long k = 0; k < packetWindow.size() - 1; k++) {
-              packetWindow[k] = packetWindow[k + 1];
-            }
-          }
-          packetWindow.pop_back();
-          if (packetWindow.size() == 0 && i >= numPackets)
-            return;
-        } else
+
+      if (ack.getAckNumber() == prevAckNum) {
+        numDuplicateAcks++;
+      } else {
+        numDuplicateAcks = 0;
+      }
+      // Remember, these are cummulative acks now
+      prevAckNum = ack.getAckNumber();
+
+      // Filter out all packets until the acknum here:
+      int numPacketsToFilter = 0;
+      for (int i = 0; i < packetWindow.size(); i++) {
+        if (packetWindow[i].getSeqNumber() == prevAckNum) {
+          numPacketsToFilter = i;
           break;
+        }
+      }
+      if (prevAckNum ==
+          packetWindow[packetWindow.size() - 1].getSeqNumber() + MSS) {
+        // cummulative ack outside of window, so get rid of all of them!
+        numPacketsToFilter = packetWindow.size();
+      }
+      for (int i = 0; i < numPacketsToFilter; i++) {
+        packetWindow.pop_front(); // pop out the front of the deque
+      }
+      if (packetWindow.size() == 0 && currFileChunk >= numPackets) {
+        break;
+      }
+
+      // Based on num duplicate Acks, we need to do logic here:
+      if (numDuplicateAcks == 3) {
+        inFastRetransmission = true;
+        ssThreshold = (ssThreshold / 2);
+        cWindowSize = ssThreshold + 3 * MSS;
+        // Go into fast recovery here
+        packetWindow[0].convertPacketToBuffer(sendBuf);
+        // cout << "Sending chunk " << i << endl;
+        cout << "Sending packet " << p.getSeqNumber() << " " << cWindowSize
+             << " " << ssThreshold << endl;
+        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
+                   sizeof(their_addr)) < 0)
+          throwError("Could not send to the client");
+        packetWindow[0].startTimer();
+        // fastRetransmitAndRecovery(sockfd, their_addr, fileSize, fileBuffer,
+        //                           prevAckNum, currFileChunk);
+      } else {
+        if (numDuplicateAcks > 3) {
+          cWindowSize += MSS;
+        } else if (cWindowSize == ssThreshold) {
+          // Still in slow start
+          cWindowSize += MSS;
+        } else if (cWindowSize > ssThreshold) {
+          // Congestion Avoidance
+          cWindowSize += (1.0 / (cWindowSize / MSS)) * MSS;
+        }
       }
     }
     for (unsigned long j = 0; j < packetWindow.size(); j++)
@@ -228,7 +273,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
         packetWindow[j].startTimer();
 
         // In timeout, so ssThreshold = max(cwnd/2, 2*mss)
-        ssThreshold = max(cWindowSize / 2, 2 * MSS);
+        ssThreshold = max((int)cWindowSize / 2, 2 * MSS);
         cWindowSize = 1;
       }
   }
