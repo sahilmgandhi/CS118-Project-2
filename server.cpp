@@ -188,35 +188,26 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       buf[recvlen] = 0;
       ack.convertBufferToPacket(buf);
       cout << "Receiving packet " << ack.getAckNumber() << endl;
-      if (ack.getSeqNumber() == initWindow[1].getAckNumber()) {
-        initWindow[1].convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << initWindow[1].getSeqNumber() << " "
-             << WINDOW << " Retransmission" << endl;
-        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
-                   sizeof(their_addr)) < 0)
-          throwError("Could not send to the client");
-      } else {
-        clientSeqNum = ack.getSeqNumber();
-        for (unsigned long j = 0; j < packetWindow.size(); j++)
-          if (packetWindow[j].getSeqNumber() == ack.getAckNumber())
-            packetWindow[j].setAcked();
-        while (1) {
-          if (packetWindow.size() > 0 && packetWindow[0].isAcked()) {
-            if (packetWindow.size() > 1) {
-              for (unsigned long k = 0; k < packetWindow.size() - 1; k++) {
-                packetWindow[k] = packetWindow[k + 1];
-              }
+      clientSeqNum = ack.getSeqNumber();
+      for (unsigned long j = 0; j < packetWindow.size(); j++)
+        if (packetWindow[j].getSeqNumber() == ack.getAckNumber())
+          packetWindow[j].setAcked();
+      while (1) {
+        if (packetWindow.size() > 0 && packetWindow[0].isAcked()) {
+          if (packetWindow.size() > 1) {
+            for (unsigned long k = 0; k < packetWindow.size() - 1; k++) {
+              packetWindow[k] = packetWindow[k + 1];
             }
-            packetWindow.pop_back();
-            if (packetWindow.size() == 0 && i >= numPackets)
-              return;
-          } else
-            break;
-        }
+          }
+          packetWindow.pop_back();
+          if (packetWindow.size() == 0 && i >= numPackets)
+            return;
+        } else
+          break;
       }
     }
     for (unsigned long j = 0; j < packetWindow.size(); j++)
-      if (packetWindow[j].hasTimedOut(2)) {
+      if (packetWindow[j].hasTimedOut(1)) {
         packetWindow[j].convertPacketToBuffer(sendBuf);
         cout << "Sending packet " << packetWindow[j].getSeqNumber() << " "
              << WINDOW << " Retransmission" << endl;

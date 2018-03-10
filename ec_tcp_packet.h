@@ -13,9 +13,9 @@ public:
     // pos 0 = ack, pos 1 = syn, pos 2 = fin
     uint8_t flags[FLAGS] = {0}; // 3 bytes
     uint16_t dataLen = 0;       // 2 bytes
-    uint32_t cwnd = 0;          // 4 bytes
+    // uint32_t cwnd = 0;          // 4 bytes
     // set the cwnd for extra credit portion. Default is 5120 bytes (5 packets)
-  } header; // Total Header Size = 17 Bytes
+  } header; // Total Header Size = 13 Bytes
 
   // Member Variables
   uint8_t data[EC_PACKET_SIZE] = {0}; // 1015 bytes for data

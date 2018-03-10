@@ -6,8 +6,8 @@
 #define MSS 1024 // Packet + Header size
 #define RTO 0.5  // In seconds (500 ms)
 
-#define EC_PACKET_SIZE 1007
-#define EC_HEADER_SIZE 17
+#define EC_PACKET_SIZE 1011
+#define EC_HEADER_SIZE 13
 #define EC_MAXSEQ 2147483648
 
 #define MAXSEQ 30720 // This is a value in bytes

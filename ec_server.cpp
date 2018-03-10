@@ -36,10 +36,18 @@ long long clientSeqNum = 0;
 TCP_Packet initWindow[2];
 vector<TCP_Packet> packetWindow;
 
+long ssThreshold = 15360; // 15360 bytes, aka 5 packets to start
+long cWindowSize = 1024;  // 1024 bytes, aka 1 packet to start
+
+bool inSlowStart = true; // start off in Slow Start, set the rest to 0
+bool inFastRecovery = false;
+bool inFastRetransmission = false;
+bool inCongestionAvoidance = false;
+
 /**
-     * This method throws the perror and exits the program
-     * @param s           A string that is the error message
-     **/
+             * This method throws the perror and exits the program
+             * @param s           A string that is the error message
+             **/
 void throwError(string s) {
   perror(s.c_str());
   exit(1);
@@ -78,8 +86,8 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
           sendB.setSeqNumber(serverSeqNum % EC_MAXSEQ);
           sendB.setAckNumber(clientSeqNum);
           sendB.convertPacketToBuffer(sendBuf);
-          cout << "Sending packet " << serverSeqNum << " " << WINDOW << " SYN"
-               << endl;
+          cout << "Sending packet " << serverSeqNum << " " << cWindowSize
+               << " SYN" << endl;
           if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                      sizeof(their_addr)) < 0) {
             throwError("Could not send to the client");
@@ -91,7 +99,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
           // we already sent the syn/ack, we should immediately resend and
           // restart the timer
           initWindow[0].convertPacketToBuffer(sendBuf);
-          cout << "Sending packet " << serverSeqNum << " " << WINDOW
+          cout << "Sending packet " << serverSeqNum << " " << cWindowSize
                << " Retransmission "
                << " SYN" << endl;
           if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
@@ -114,7 +122,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
           fileName += (char)p.data[i];
         }
         sendB.convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
+        cout << "Sending packet " << serverSeqNum << " " << cWindowSize << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
           throwError("Could not send to the client");
@@ -128,7 +136,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
       if (initWindow[0].isSent() && !initWindow[0].isAcked() &&
           initWindow[0].hasTimedOut(1)) {
         initWindow[0].convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << serverSeqNum << " " << WINDOW << endl;
+        cout << "Sending packet " << serverSeqNum << " " << cWindowSize << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
           throwError("Could not send to the client");
@@ -159,9 +167,10 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
   numPackets = fs / PACKET_SIZE + 1;
   socklen_t sin_size = sizeof(struct sockaddr_in);
   long i = 0;
-  // cout << "Number of packets to send is " << numPackets << endl;
+  int numDuplicateAcks = 0;
+
   while (1) {
-    if (i < numPackets && packetWindow.size() < WINDOW / MSS) {
+    if (i < numPackets && packetWindow.size() < cWindowSize / MSS) {
       p.setFlags(0, 0, 0);
       if (i == numPackets - 1) {
         p.setData((uint8_t *)(fileBuffer + i * PACKET_SIZE),
@@ -175,7 +184,8 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       p.convertPacketToBuffer(sendBuf);
       packetWindow.push_back(p);
       // cout << "Sending chunk " << i << endl;
-      cout << "Sending packet " << p.getSeqNumber() << " " << WINDOW << endl;
+      cout << "Sending packet " << p.getSeqNumber() << " " << cWindowSize << " "
+           << ssThreshold << endl;
       if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                  sizeof(their_addr)) < 0)
         throwError("Could not send to the client");
@@ -188,42 +198,38 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       buf[recvlen] = 0;
       ack.convertBufferToPacket(buf);
       cout << "Receiving packet " << ack.getAckNumber() << endl;
-      if (ack.getSeqNumber() == initWindow[1].getAckNumber()) {
-        initWindow[1].convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << initWindow[1].getSeqNumber() << " "
-             << WINDOW << " Retransmission" << endl;
-        if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
-                   sizeof(their_addr)) < 0)
-          throwError("Could not send to the client");
-      } else {
-        clientSeqNum = ack.getSeqNumber();
-        for (unsigned long j = 0; j < packetWindow.size(); j++)
-          if (packetWindow[j].getSeqNumber() == ack.getAckNumber())
-            packetWindow[j].setAcked();
-        while (1) {
-          if (packetWindow.size() > 0 && packetWindow[0].isAcked()) {
-            if (packetWindow.size() > 1) {
-              for (unsigned long k = 0; k < packetWindow.size() - 1; k++) {
-                packetWindow[k] = packetWindow[k + 1];
-              }
+
+      clientSeqNum = ack.getSeqNumber();
+      for (unsigned long j = 0; j < packetWindow.size(); j++)
+        if (packetWindow[j].getSeqNumber() == ack.getAckNumber())
+          packetWindow[j].setAcked();
+      while (1) {
+        if (packetWindow.size() > 0 && packetWindow[0].isAcked()) {
+          if (packetWindow.size() > 1) {
+            for (unsigned long k = 0; k < packetWindow.size() - 1; k++) {
+              packetWindow[k] = packetWindow[k + 1];
             }
-            packetWindow.pop_back();
-            if (packetWindow.size() == 0 && i >= numPackets)
-              return;
-          } else
-            break;
-        }
+          }
+          packetWindow.pop_back();
+          if (packetWindow.size() == 0 && i >= numPackets)
+            return;
+        } else
+          break;
       }
     }
     for (unsigned long j = 0; j < packetWindow.size(); j++)
-      if (packetWindow[j].hasTimedOut(2)) {
+      if (packetWindow[j].hasTimedOut(1)) {
         packetWindow[j].convertPacketToBuffer(sendBuf);
         cout << "Sending packet " << packetWindow[j].getSeqNumber() << " "
-             << WINDOW << " Retransmission" << endl;
+             << cWindowSize << " " << ssThreshold << " Retransmission" << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0)
           throwError("Could not send to the client");
         packetWindow[j].startTimer();
+
+        // In timeout, so ssThreshold = max(cwnd/2, 2*mss)
+        ssThreshold = max(cWindowSize / 2, 2 * MSS);
+        cWindowSize = 1;
       }
   }
 }
@@ -247,7 +253,7 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
   finPacket.setSeqNumber(serverSeqNum % EC_MAXSEQ);
   finPacket.setAckNumber(clientSeqNum);
   finPacket.convertPacketToBuffer(sendBuf);
-  cout << "Sending packet " << finPacket.getSeqNumber() << " " << WINDOW
+  cout << "Sending packet " << finPacket.getSeqNumber() << " " << cWindowSize
        << " FIN" << endl;
   if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
              sizeof(their_addr)) < 0)
@@ -271,8 +277,8 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
         ackPacket.setSeqNumber(serverSeqNum % EC_MAXSEQ);
         ackPacket.setAckNumber(receivedPacket.getSeqNumber());
         ackPacket.setFlags(1, 0, 0);
-        cout << "Sending packet " << ackPacket.getSeqNumber() << " " << WINDOW
-             << endl;
+        cout << "Sending packet " << ackPacket.getSeqNumber() << " "
+             << cWindowSize << endl;
         ackPacket.convertPacketToBuffer(sendBuf);
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0) {
@@ -288,8 +294,8 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
     if (finPacket.hasTimedOut(1) && !finPacket.isAcked() && retryFin < 100) {
       // can retransmit this fin packet as many times as we want
       finPacket.convertPacketToBuffer(sendBuf);
-      cout << "Sending packet " << finPacket.getSeqNumber() << " " << WINDOW
-           << " Retransmission FIN" << endl;
+      cout << "Sending packet " << finPacket.getSeqNumber() << " "
+           << cWindowSize << " Retransmission FIN" << endl;
       if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                  sizeof(their_addr)) < 0)
         throwError("Could not send to the client");

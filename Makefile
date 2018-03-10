@@ -7,11 +7,11 @@ default:
 	$(CC) -Wall -Wextra -g -o p2_client -I. client.cpp
 
 dist:
-	tar -cvzf $project2_(UID1)_(UID2).tar server.cpp client.cpp README report.pdf Makefile
+	tar -cvzf project2_$(UID1)_$(UID2).tar server.cpp client.cpp globals.h tcp_packet.h ec_tcp_packet.h ec_server.cpp ec_client.cpp README report.pdf Makefile
 
 clean:
 	rm -rf p2_server p2_client
-	rm $project2_(UID1)_(UID2).tar
+	rm project2_$(UID1)_$(UID2).tar
 
 ec:
 	$(CC) -Wall -Wextra -g -o ec_p2_server -I. ec_server.cpp
