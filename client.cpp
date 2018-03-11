@@ -38,7 +38,8 @@ TCP_Packet movingPackWind[RECEIVEWINDOW];
 int startWindSeq = 0;
 int lastWindSeq = 0;
 bool atLeastOnePacketWritten = false;
-// vector<TCP_Packet> packetWindow;
+bool skipFile = false;
+int finSeqNum = 0;
 vector<uint8_t> fileVector;
 
 /**
@@ -136,11 +137,17 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
           }
           initWindow[1].startTimer();
         }
-      } else if (rec.getAck() &&
+      } else if ((rec.getAck() || rec.getFin()) &&
                  rec.getAckNumber() == initWindow[1].getSeqNumber()) {
         // Ack for the filename packet
         initWindow[1].setAcked();
         startWindSeq = rec.getSeqNumber();
+        // cout << "Starting window seq is " << startWindSeq << endl;
+        if (rec.getFin()) {
+          // only if the file does NOT exist:
+          skipFile = true;
+          finSeqNum = rec.getSeqNumber();
+        }
       }
       // else we just ignore it, since we are not dealing with that right now,
       // JUST the initial handshake
@@ -173,6 +180,9 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
   }
 }
 
+/**
+ * Initialize the moving window of size 25
+ **/
 void initializeMovingWindow() {
   for (int i = 1; i < RECEIVEWINDOW + 1; i++) {
     movingPackWind[i - 1].setSeqNumber((startWindSeq + i * MSS) % MAXSEQ);
@@ -180,7 +190,12 @@ void initializeMovingWindow() {
   lastWindSeq = movingPackWind[RECEIVEWINDOW - 1].getSeqNumber();
 }
 
-int receiveFile(int sockfd, struct sockaddr_in addr) {
+/**
+ * Receives the file from the server
+ * @param sockfd        int referring to sock file descriptor
+ * @param addr          struct for sockaddr_in
+ **/
+void receiveFile(int sockfd, struct sockaddr_in addr) {
   socklen_t sin_size;
   uint8_t buf[MSS + 1];
   uint8_t data[MSS];
@@ -210,7 +225,8 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
             }
           }
         }
-        return rec.getSeqNumber();
+        finSeqNum = rec.getSeqNumber();
+        break;
       }
       ack.setAckNumber(rec.getSeqNumber() % MAXSEQ);
       ack.setSeqNumber(clientSeqNum % MAXSEQ);
@@ -282,7 +298,6 @@ int receiveFile(int sockfd, struct sockaddr_in addr) {
                                            MAXSEQ);
             movingPackWind[i].resetAcked();
             movingPackWind[i].resetData();
-            // cout << " Moving the window " << endl;
             counter++;
           }
           // Set the newly received ack:
@@ -322,10 +337,8 @@ void assembleFileFromChunks() {
  * Received a FIN from the server, and starting its own FIN sequence
  * @param sockfd      Integer representing the socket number
  * @param addr        The socaddr_in structure
- * @param finAckNum   The ack number to send back for the fin received to
- *                    terminate the connection
  **/
-void closeConnection(int sockfd, struct sockaddr_in addr, int finAckNum) {
+void closeConnection(int sockfd, struct sockaddr_in addr) {
   // send SYN
   TCP_Packet finPacket;
   TCP_Packet ackPacket;
@@ -334,7 +347,7 @@ void closeConnection(int sockfd, struct sockaddr_in addr, int finAckNum) {
   clientSeqNum++;
 
   ackPacket.setSeqNumber(clientSeqNum % MAXSEQ);
-  ackPacket.setAckNumber(finAckNum % MAXSEQ);
+  ackPacket.setAckNumber(finSeqNum % MAXSEQ);
   ackPacket.setFlags(1, 0, 0);
   uint8_t packet[MSS];
   bool hasBeenReSent = false;
@@ -348,7 +361,7 @@ void closeConnection(int sockfd, struct sockaddr_in addr, int finAckNum) {
 
   clientSeqNum++;
   finPacket.setSeqNumber(clientSeqNum % MAXSEQ);
-  finPacket.setAckNumber((finAckNum + 1) % MAXSEQ);
+  finPacket.setAckNumber((finSeqNum + 1) % MAXSEQ);
   finPacket.setFlags(0, 0, 1);
   finPacket.convertPacketToBuffer(packet);
   cout << "Sending packet " << finPacket.getAckNumber() << " FIN " << endl;
@@ -370,7 +383,7 @@ void closeConnection(int sockfd, struct sockaddr_in addr, int finAckNum) {
       recPacket.convertBufferToPacket(buf);
 
       cout << "Receiving packet " << recPacket.getSeqNumber() << endl;
-      if (recPacket.getFin() && recPacket.getSeqNumber() == finAckNum) {
+      if (recPacket.getFin() && recPacket.getSeqNumber() == finSeqNum) {
         // Duplicate fin from the server. Resend the ack for it
         ackPacket.convertPacketToBuffer(packet);
         cout << "Sending packet " << ackPacket.getAckNumber()
@@ -423,7 +436,6 @@ int main(int argc, char *argv[]) {
   int sockfd;
   struct hostent *server;
   struct sockaddr_in addr;
-  int finSeqNum = 0;
 
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     throwError("socket");
@@ -439,10 +451,12 @@ int main(int argc, char *argv[]) {
   addr.sin_port = htons(port);
 
   initiateConnection(sockfd, addr, fileName);
-  initializeMovingWindow();
-  finSeqNum = receiveFile(sockfd, addr);
+  if (!skipFile) {
+    initializeMovingWindow();
+    receiveFile(sockfd, addr);
+  }
 
-  closeConnection(sockfd, addr, finSeqNum);
+  closeConnection(sockfd, addr);
   if (!atLeastOnePacketWritten) {
     cout << "404 Error! The packet was not found on the server side! Closing "
             "the client program"

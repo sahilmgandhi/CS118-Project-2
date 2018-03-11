@@ -1,7 +1,7 @@
 // Sahil Gandhi and Arpit Jasapara
 // CS 118 Winter 2018
 // Project 2
-// This is the server code for the second project.
+// This is the extra credit server code for the second project.
 
 #include <errno.h>
 #include <fcntl.h>
@@ -306,6 +306,7 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
              sizeof(their_addr)) < 0)
     throwError("Could not send to the client");
   finPacket.startTimer();
+  ackPacket.startTimer();
 
   bool hasBeenSent = false;
   while (1) {
@@ -348,8 +349,9 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
         throwError("Could not send to the client");
       finPacket.startTimer();
       retryFin++;
-    } else if ((ackPacket.isSent() && ackPacket.hasTimedOut(2)) ||
-               retryFin > 100) {
+    } else if ((finPacket.isAcked() && ackPacket.hasTimedOut(2)) ||
+               (ackPacket.isSent() && ackPacket.hasTimedOut(2)) ||
+               retryFin >= 100) {
       cout << "Server is done transmitting Closing server" << endl;
       break;
     }

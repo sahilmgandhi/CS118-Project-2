@@ -253,7 +253,7 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
              sizeof(their_addr)) < 0)
     throwError("Could not send to the client");
   finPacket.startTimer();
-
+  ackPacket.startTimer();
   bool hasBeenSent = false;
   while (1) {
     recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
@@ -295,8 +295,9 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
         throwError("Could not send to the client");
       finPacket.startTimer();
       retryFin++;
-    } else if ((ackPacket.isSent() && ackPacket.hasTimedOut(2)) ||
-               retryFin > 100) {
+    } else if ((finPacket.isAcked() && ackPacket.hasTimedOut(2)) ||
+               (ackPacket.isSent() && ackPacket.hasTimedOut(2)) ||
+               (retryFin >= 100)) {
       cout << "Server is done transmitting Closing server" << endl;
       break;
     }
