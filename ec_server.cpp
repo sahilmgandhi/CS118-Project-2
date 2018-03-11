@@ -166,6 +166,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
   long currFileChunk = 0;
   uint32_t prevAckNum = 0;
   int numDuplicateAcks = 0;
+  int duplicateAckNum = 0;
 
   while (1) {
     if (currFileChunk < numPackets && packetWindow.size() < cWindowSize / MSS) {
@@ -206,7 +207,8 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
       } else {
         clientSeqNum = ack.getSeqNumber();
 
-        if (ack.getAckNumber() == prevAckNum) {
+        if (ack.getAckNumber() == prevAckNum ||
+            (inFastRetransmission && ack.getAckNumber() < duplicateAckNum)) {
           numDuplicateAcks++;
         } else {
           numDuplicateAcks = 0;
@@ -243,6 +245,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
           inFastRetransmission = true;
           ssThreshold = max(2 * MSS, (int)(ssThreshold / 2));
           cWindowSize = ssThreshold + 3 * MSS;
+          duplicateAckNum = ack.getAckNumber();
           // Go into fast recovery here
           packetWindow[0].convertPacketToBuffer(sendBuf);
           cout << "Sending packet " << packetWindow[0].getSeqNumber() << " "
@@ -264,20 +267,21 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
         }
       }
     }
-    for (unsigned int j = 0; j < packetWindow.size(); j++)
-      if (packetWindow[j].hasTimedOut(1)) {
-        packetWindow[j].convertPacketToBuffer(sendBuf);
-        cout << "Sending packet " << packetWindow[j].getSeqNumber() << " "
+    if (packetWindow.size() > 0) {
+      if (packetWindow[0].hasTimedOut(1)) {
+        packetWindow[0].convertPacketToBuffer(sendBuf);
+        cout << "Sending packet " << packetWindow[0].getSeqNumber() << " "
              << cWindowSize << " " << ssThreshold << " Retransmission" << endl;
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0)
           throwError("Could not send to the client");
-        packetWindow[j].startTimer();
+        packetWindow[0].startTimer();
 
         // In timeout, so ssThreshold = max(cwnd/2, 2*mss)
         ssThreshold = max((int)cWindowSize / 2, 2 * MSS);
         cWindowSize = MSS;
       }
+    }
   }
 }
 
