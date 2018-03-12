@@ -71,7 +71,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
   p.setFlags(0, 1, 0);
   uint8_t packet[MSS];
   p.convertPacketToBuffer(packet);
-  cout << "Sending packet " << p.getSeqNumber() << " SYN " << endl;
+  cout << "Sending packet SYN " << endl;
   if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr, sizeof(addr)) <
       0) {
     throwError("Could not send to the server");
@@ -149,8 +149,13 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
         counter++;
       } else if (initWindow[i].isSent() && initWindow[i].hasTimedOut(1)) {
         initWindow[i].convertPacketToBuffer(packet);
-        cout << "Sending packet " << initWindow[i].getSeqNumber()
-             << " Retransmission " << endl;
+        cout << "Sending packet ";
+        if (i == 0) {
+          cout << "SYN";
+        } else {
+          cout << initWindow[i].getSeqNumber();
+        }
+        cout << " Retransmission " << endl;
         if (sendto(sockfd, &packet, MSS, 0, (struct sockaddr *)&addr,
                    sizeof(addr)) < 0) {
           throwError("Could not send to the server");

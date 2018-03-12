@@ -1,6 +1,6 @@
 CC=g++ -std=c++11
-UID1=504742401
-UID2=704598105
+UID2=504742401
+UID1=704598105
 
 default:
 	$(CC) -Wall -Wextra -g -o p2_server -I. server.cpp
