@@ -59,7 +59,7 @@ string initiateConnection(int sockfd, struct sockaddr_in &their_addr) {
   TCP_Packet sendB;
   uint8_t sendBuf[MSS];
   string fileName = "";
-
+  srand(time(NULL));
   while (1) {
     recvlen = recvfrom(sockfd, buf, MSS, 0 | MSG_DONTWAIT,
                        (struct sockaddr *)&their_addr, &sin_size);
@@ -302,18 +302,6 @@ void closeConnection(int sockfd, struct sockaddr_in &their_addr) {
       break;
     }
   }
-}
-
-/**
- * This method will reap zombie processes (signal handler for it)
- * @param sig   The signal for the signal handler
- **/
-void handle_sigchild(int sig) {
-  while (waitpid((pid_t)(-1), 0, WNOHANG) > 0)
-    ;
-  fprintf(stderr,
-          "Child exited successfully with code %d. Reaped child process.\n",
-          sig);
 }
 
 int main(int argc, char *argv[]) {

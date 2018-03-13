@@ -25,6 +25,7 @@
 
 #define INIT_CWND 1024
 #define INIT_SSTHRESH 15360
+#define EC_RWND 100
 
 // Random other Macros
 #define BILLION 1000000000L

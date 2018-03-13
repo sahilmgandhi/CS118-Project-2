@@ -52,18 +52,6 @@ void throwError(string s) {
 }
 
 /**
- * This method will reap zombie processes (signal handler for it)
- * @param sig         The signal for the signal handler
- **/
-void handle_sigchild(int sig) {
-  while (waitpid((pid_t)(-1), 0, WNOHANG) > 0)
-    ;
-  fprintf(stderr,
-          "Child exited successfully with code %d. Reaped child process.\n",
-          sig);
-}
-
-/**
  * Send the SYN to start the connection send the ACK to finsih the connection
  * and send the datafile name.
  * @param sockfd      Integer representing the socket number
@@ -75,6 +63,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
   // send SYN
   TCP_Packet p;
   socklen_t sin_size;
+  srand(time(NULL));
   clientSeqNum = rand() % 10000;
   p.setSeqNumber(clientSeqNum % MAXSEQ);
   p.setFlags(0, 1, 0);

@@ -3,3 +3,4 @@ p2_server
 p2_client.dSYM/
 p2_server.dSYM/
 .DS_Store
+veryLarge.txt
