@@ -136,7 +136,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
                  rec.getAckNumber() == initWindow[1].getSeqNumber()) {
         // Ack for the filename packet
         initWindow[1].setAcked();
-        startWindSeq = rec.getSeqNumber();
+        startWindSeq = rec.getSeqNumber() + 1;
         if (rec.getFin()) {
           // only if the file does NOT exist:
           skipFile = true;
@@ -197,8 +197,8 @@ void setSendAckNum() {
  * Initialize the moving window of size 25
  **/
 void initializeMovingWindow() {
-  for (int i = 1; i < EC_RWND + 1; i++) {
-    movingPackWind[i - 1].setSeqNumber((startWindSeq + i * MSS));
+  for (int i = 0; i < EC_RWND; i++) {
+    movingPackWind[i].setSeqNumber((startWindSeq + i * MSS));
   }
   lastWindSeq = movingPackWind[EC_RWND - 1].getSeqNumber();
 }

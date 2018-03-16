@@ -130,7 +130,7 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
                  rec.getAckNumber() == initWindow[1].getSeqNumber()) {
         // Ack for the filename packet
         initWindow[1].setAcked();
-        startWindSeq = rec.getSeqNumber();
+        startWindSeq = rec.getSeqNumber() + 1;
         // cout << "Starting window seq is " << startWindSeq << endl;
         if (rec.getFin()) {
           // only if the file does NOT exist:
@@ -178,8 +178,8 @@ void initiateConnection(int sockfd, struct sockaddr_in addr, string fileName) {
  * Initialize the moving window of size 25
  **/
 void initializeMovingWindow() {
-  for (int i = 1; i < RECEIVEWINDOW + 1; i++) {
-    movingPackWind[i - 1].setSeqNumber((startWindSeq + i * MSS) % MAXSEQ);
+  for (int i = 0; i < RECEIVEWINDOW; i++) {
+    movingPackWind[i].setSeqNumber((startWindSeq + i * MSS) % MAXSEQ);
   }
   lastWindSeq = movingPackWind[RECEIVEWINDOW - 1].getSeqNumber();
 }

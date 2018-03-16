@@ -167,9 +167,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
   uint32_t prevAckNum = 0;
   int numDuplicateAcks = 0;
   int duplicateAckNum = 0;
-  int prevRetransmitSeq = 0;
-  bool hasRetransmitted = false;
-  int receiverWindowSize = 60;
+  serverSeqNum++;
 
   while (1) {
     while (1) {
@@ -185,7 +183,6 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
           p.setData((uint8_t *)(fileBuffer + currFileChunk * EC_PACKET_SIZE),
                     EC_PACKET_SIZE);
         }
-        serverSeqNum += MSS;
         p.setSeqNumber(serverSeqNum % EC_MAXSEQ);
         p.setAckNumber(clientSeqNum);
         p.convertPacketToBuffer(sendBuf);
@@ -195,6 +192,7 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
         if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                    sizeof(their_addr)) < 0)
           throwError("Could not send to the client");
+        serverSeqNum += MSS;
         packetWindow.back().startTimer();
         currFileChunk++;
       } else {
