@@ -257,7 +257,8 @@ void sendChunkedFile(int sockfd, struct sockaddr_in &their_addr,
           // Go into fast recovery here
           packetWindow[0].convertPacketToBuffer(sendBuf);
           cout << "Sending packet " << packetWindow[0].getSeqNumber() << " "
-               << cWindowSize << " " << ssThreshold << endl;
+               << cWindowSize << " " << ssThreshold << " Fast Retransmission "
+               << endl;
           if (sendto(sockfd, &sendBuf, MSS, 0, (struct sockaddr *)&their_addr,
                      sizeof(their_addr)) < 0)
             throwError("Could not send to the client");

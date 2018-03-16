@@ -9,8 +9,8 @@ default:
 	$(CC) -Wall -Wextra -g -o ec_p2_client -I. ec_client.cpp
 
 dist:
-	tar -cvzf project2_$(UID1)_$(UID2).tar server.cpp client.cpp globals.h tcp_packet.h ec_tcp_packet.h ec_server.cpp ec_client.cpp README.md report.pdf Makefile
-	zip project2_$(UID1)_$(UID2) server.cpp client.cpp globals.h tcp_packet.h ec_tcp_packet.h ec_server.cpp ec_client.cpp README.md report.pdf Makefile
+	tar -cvzf project2_$(UID1)_$(UID2).tar server.cpp client.cpp globals.h tcp_packet.h ec_tcp_packet.h ec_server.cpp ec_client.cpp README.md report.pdf Makefile p2_slides.pptx
+	zip project2_$(UID1)_$(UID2) server.cpp client.cpp globals.h tcp_packet.h ec_tcp_packet.h ec_server.cpp ec_client.cpp README.md report.pdf Makefile p2_slides.pptx
 
 
 clean:
