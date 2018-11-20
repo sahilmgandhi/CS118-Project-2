@@ -5,8 +5,7 @@ This is project code for implementing a TCP connection with the SR (selective re
 ## Group Identification:
 Student Names: Sahil Gandhi and Arpit Jasapara
 
-Student IDS: 704-598-105 and 504-742-401
-
+Student IDS: #####
 Group Number: 3
 
 ## Compiling project
